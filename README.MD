@@ -1,44 +1,39 @@
-# Парсер сервиса по продаже билетов.
-Выдача настроена в телеграмм боте написанном на Aiogram.
+# Ticket Sale Service Parser
+This Telegram bot is designed to collect and provide information about theater performances. The bot has different functionalities depending on whether the user is registered (has a record in the `P_SHOWS` dictionary) or not.
 
-Этот телеграм-бот предназначен для сбора и предоставления информации о спектаклях театра. Бот имеет разные функции в зависимости от того, является ли пользователь зарегистрированным (имеет запись в словаре `P_SHOWS`) или нет.
+## Main Functionality
 
-## Основной функционал
+### For unregistered users:
 
-### Для незарегистрированных пользователей:
+1. `/start` - command that greets the user and offers to view the event schedule.
+2. `Этот месяц` - displays a list of performances for the current month.
+3. `Следующий месяц` - displays a list of performances for the next month.
 
-1. `/start` - команда, которая приветствует пользователя и предлагает посмотреть афишу.
-2. `Этот месяц` - показывает список спектаклей на текущий месяц.
-3. `Следующий месяц` - показывает список спектаклей на следующий месяц.
+### For registered users:
 
-### Для зарегистрированных пользователей:
+1. `/start` - command that greets the user and opens the personal menu.
+2. `Этот месяц` - displays a list of performances for the current month.
+3. `Следующий месяц` - displays a list of performances for the next month.
+4. `Мои спектакли` - opens a menu to choose a month and displays personalized information about the performances for the selected month.
+5. `↩️` - returns the user to the main menu.
 
-1. `/start` - команда, которая приветствует пользователя и открывает персональное меню.
-2. `Этот месяц` - показывает список спектаклей на текущий месяц.
-3. `Следующий месяц` - показывает список спектаклей на следующий месяц.
-4. `Мои спектакли` - открывает меню для выбора месяца и показывает персональную информацию о спектаклях для выбранного месяца.
-5. `↩️` - возвращает пользователя в главное меню.
+## Installation and Configuration
 
-## Установка и настройка
-
-1. Установите необходимые зависимости из файла `requirements.txt`:
+1. Install the necessary dependencies from the `requirements.txt` file:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Замените `YOUR_TOKEN` в файле `config.py` на токен вашего телеграм-бота.
+2. Replace `YOUR_TOKEN` in the `config.py` file with your Telegram bot token.
 
-3. Заполните переменные `COM_ID`, `PERSONS` и `P_SHOWS` в файле `config.py` соответствующими данными о компании, пользователях и спектаклях.
-Также в папке json_library есть готовый скрипт для парсинга всех организацией подключенных к сервису театров.
-При запуске скрипта `profticket_place_parser.py`, он создаст в папке json_library файл 
-`profticket.json` с данными о театрах. Вы выберете нужный ID и укажите в `COM_ID`.
+3. Fill in the `COM_ID`, `PERSONS`, and `P_SHOWS` variables in the `config.py` file with the relevant data about the company, users, and performances.
+Additionally, in the json_library folder, there is a ready-to-use script for parsing all the organizations connected to the ticket service. When running the `profticket_place_parser.py` script, it will create a `profticket.json` file in the json_library folder with theater data. Choose the required ID and specify it in `COM_ID`.
 
-4. Запустите бота, выполнив следующую команду:
+4. Run the bot by executing the following command:
 
 ```bash
 python main.py
 ```
 
-Теперь ваш телеграм-бот готов к использованию.
-
+Now your Telegram bot is ready for use.
