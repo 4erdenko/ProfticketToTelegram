@@ -3,33 +3,57 @@ from datetime import datetime
 import pymorphy2
 import pytz
 
-# Московское время для
-# предотвращения ошибок с датой при размещении на сервере с другой тайм-зоной.
+# Moscow time to prevent date errors
+# when deploying on a server with a different time zone.
 moscow_tz = pytz.timezone('Europe/Moscow')
 
+# Get the current Moscow time
 current_time = datetime.now(moscow_tz)
+# Calculate the next month
 next_month = current_time.month + 1
-# Автоматическое склонение слова в зависимости от числа.
+
+# Initialize the pymorphy2 MorphAnalyzer for word declension
 morph = pymorphy2.MorphAnalyzer()
 
 
 def pluralize(word, count):
+    """
+    Function to return the correct plural form of a word
+    depending on the count.
+
+    Args:
+        word (str): The word to pluralize.
+        count (int): The count to determine the correct plural form.
+
+    Returns:
+        str: The pluralized word.
+    """
     parsed_word = morph.parse(word)[0]
     return parsed_word.make_agree_with_number(count).word
 
 
-COM_ID = None  # ID компании, которую вы хотите отслеживать.
-TELEGRA_BOT_TOKEN = 'YOUR_TOKEN'
+# The company ID you want to track.
+COM_ID = None
 
+# Your Telegram bot token'
+TELEGRA_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+
+# The waiting message to display while gathering information
 WAIT_MSG = 'Собираю информацию, пожалуйста подождите...'
+
+# The maximum length of a message
+MAX_MSG_LEN = 4096
+
+# A dictionary of user names and their corresponding Telegram user IDs
 PERSONS = {
     'EXAMPLE_NAME': 000000000,
 }
-# Словарь с ключами - id пользователей, значениями - множествами спектаклей.
-# Спектакли должны быть указаны в точности так, как они выдаются в общем
-# списке.
+
+# A dictionary with keys as user IDs, and values as sets of performances.
+# Performances must be specified exactly as they are
+# displayed in the general list.
 P_SHOWS = {
-    PERSONS.get('EXAMPLE'): {
+    PERSONS.get('EXAMPLE_NAME'): {
         'НАЗВАНИЕ СПЕКТАКЛЯ',
     },
 }

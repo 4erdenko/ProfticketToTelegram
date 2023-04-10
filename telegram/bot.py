@@ -1,3 +1,4 @@
+import asyncio
 import logging as logger
 
 import aiogram
@@ -24,10 +25,10 @@ dp = aiogram.Dispatcher(bot)
 @dp.message_handler(commands=['start'])
 async def process_start_command(message: aiogram.types.Message):
     """
-    Реакция на команду /start
+    Handles the /start command.
 
-    Returns: отправляет пользователя на проверку в choose_person
-
+    Returns:
+        Sends the user to choose_person to check their status.
     """
     await choose_person(message)
     logger.info(
@@ -39,9 +40,11 @@ async def process_start_command(message: aiogram.types.Message):
 
 async def choose_person(message: aiogram.types.Message):
     """
-    Returns: Если пользователь в списке P_SHOWS, то даёт ему клавиатуру с
-    персональными данными, иначе - обычную клавиатуру.
+    Determines if the user is in the P_SHOWS list and provides
+    a personalized or regular keyboard accordingly.
 
+    Returns:
+        None: Sends a message with either a personalized or regular keyboard.
     """
     if message.from_user.id in P_SHOWS:
         await message.answer(
@@ -58,7 +61,11 @@ async def choose_person(message: aiogram.types.Message):
 
 async def choose_personal_shows(message: aiogram.types.Message, month=None):
     """
-    Returns: Отправка сообщения с персональной выборкой спектаклей.
+    Sends a message with a personalized selection of
+    performances for the specified month.
+
+    Returns:
+        str: Sends a message with the personalized performance selection.
     """
     if message.from_user.id in P_SHOWS:
         return pt.get_special_info(
@@ -69,10 +76,10 @@ async def choose_personal_shows(message: aiogram.types.Message, month=None):
 @dp.message_handler(Text(equals=['Этот месяц']))
 async def this_month_command(message: aiogram.types.Message):
     """
-    Реакция на команду "Этот месяц"
+    Handles the 'Этот месяц' command.
 
-    Returns: Отправка сообщения с данными о спектаклях на этот месяц.
-
+    Returns:
+        Sends a message with this month's performance data.
     """
     try:
         msg = await message.answer(WAIT_MSG)
@@ -80,7 +87,8 @@ async def this_month_command(message: aiogram.types.Message):
             message.chat.id,
             'typing',
         )
-        await msg.edit_text(pt.get_special_info())
+        await send_chunks_edit(message.chat.id, msg, pt.get_special_info())
+
         logger.info(
             f'{message.from_user.full_name} '
             f'(@{message.from_user.username}) '
@@ -96,10 +104,10 @@ async def this_month_command(message: aiogram.types.Message):
 @dp.message_handler(Text(equals=['Следующий месяц']))
 async def next_month_command(message: aiogram.types.Message):
     """
-    Реакция на команду "Следующий месяц"
+    Handles the 'Следующий месяц' command.
 
-    Returns: Отправка сообщения с данными о спектаклях на следующий месяц.
-
+    Returns:
+        Sends a message with performance data for the next month.
     """
     try:
         msg = await message.answer(WAIT_MSG)
@@ -107,7 +115,10 @@ async def next_month_command(message: aiogram.types.Message):
             message.chat.id,
             'typing',
         )
-        await msg.edit_text(pt.get_special_info(month=next_month))
+        await send_chunks_edit(
+            message.chat.id, msg, pt.get_special_info(month=next_month)
+        )
+
         logger.info(
             f'{message.from_user.full_name} '
             f'(@{message.from_user.username}) '
@@ -124,10 +135,10 @@ async def next_month_command(message: aiogram.types.Message):
 @dp.message_handler(Text(equals=['Мои спектакли']))
 async def my_shows_command(message: aiogram.types.Message):
     """
-    Реакция на команду "Мои спектакли"
+    Handles the 'Мои спектакли' command.
 
-    Returns: Создаёт кнопки для выбора месяца.
-
+    Returns:
+        Creates buttons to select the month.
     """
     await message.answer(
         'Выберите месяц', reply_markup=keyboard_private_months
@@ -137,11 +148,10 @@ async def my_shows_command(message: aiogram.types.Message):
 @dp.message_handler(Text(equals=['Этот']))
 async def this_month_private_command(message: aiogram.types.Message):
     """
-    Реакция на команду "Этот" в персональном разделе
+    Handles the 'Этот' command in the personal section.
 
-    Returns: Отправка сообщения с персональными данными о спектаклях на этот
-        месяц.
-
+    Returns:
+        Sends a message with personal data about this month's performances.
     """
     try:
         msg = await message.answer(WAIT_MSG)
@@ -165,11 +175,11 @@ async def this_month_private_command(message: aiogram.types.Message):
 @dp.message_handler(Text(equals=['Следующий']))
 async def next_month_private_command(message: aiogram.types.Message):
     """
-    Реакция на команду "Следующий" в персональном разделе
+    Handles the 'Следующий' command in the personal section.
 
-    Returns: Отправка сообщения с персональными данными о спектаклях на
-        следующий месяц.
-
+    Returns:
+        Sends a message with personal data about performances
+        for the next month.
     """
     try:
         msg = await message.answer(WAIT_MSG)
@@ -196,10 +206,34 @@ async def next_month_private_command(message: aiogram.types.Message):
 @dp.message_handler(Text(equals=['↩️']))
 async def back_command(message: aiogram.types.Message):
     """
-    Реакция на команду "↩️"
+    Handles the '↩️' command.
 
-    Returns: Возвращает пользователя в главное меню.
-
+    Returns:
+        Returns the user to the main menu.
     """
     await message.delete()
     await message.answer('Главное меню', reply_markup=keyboard_private)
+
+
+async def send_chunks_edit(chat_id, message, text, **kwargs):
+    """
+    Sends a message in chunks. The first chunk is sent using msg.edit_text,
+    and the subsequent chunks are sent using message.answer.
+
+    Args:
+        chat_id (int): The ID of the chat where the message will be sent.
+        message (aiogram.types.Message): The message object.
+        text (str): The message text to be sent.
+        **kwargs: Additional arguments to pass to the message
+            sending functions.
+
+    Returns:
+        None
+    """
+    chunks = pt.split_message_by_separator(text)
+
+    if chunks:
+        await message.edit_text(chunks.pop(0), **kwargs)
+        for chunk in chunks:
+            await message.answer(chunk, **kwargs)
+            await asyncio.sleep(1)

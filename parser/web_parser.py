@@ -2,14 +2,14 @@ from datetime import datetime
 
 import httpx
 
-from settings.config import P_SHOWS, pluralize, COM_ID
+from settings.config import P_SHOWS, pluralize, COM_ID, MAX_MSG_LEN
 
 result_dict = {}
 
 
 class ProfticketsInfo:
     """
-    Класс для получения информации о событиях с сайта spa.profticket.ru
+    Class for information about events from spa.profticket.ru
     """
 
     def __init__(self, com_id=None, page_num=None, month=None, year=None):
@@ -56,9 +56,12 @@ class ProfticketsInfo:
 
     def _places(self):
         """
+        Retrieves a dictionary with the number of available
+        seats for each event.
 
-        Returns: Получение словаря с количеством свободных мест.
-
+        Returns:
+            dict: A dictionary containing event IDs as keys and the number
+            of available seats as values.
         """
         self.places_url = (
             f'https://widget.profticket.ru/widget-api/'
@@ -76,9 +79,11 @@ class ProfticketsInfo:
 
     def _get_buy_link(self):
         """
+        Generates a ticket purchase link for each event.
 
-        Returns: Получение ссылки на покупку билета.
-
+        Returns:
+            None: The method modifies the 'buy_link' attribute for each event
+            in the 'items' attribute of the object.
         """
         for get_info in self.items:
             for event in get_info.get('events'):
@@ -94,7 +99,17 @@ class ProfticketsInfo:
 
     def get_full_info(self):
         """
-        Returns: Полный словарь с полезной нагрузкой.
+        Retrieves a complete dictionary with performance information.
+
+        Returns:
+            dict: A dictionary containing all performance details
+            such as event ID, theater, scene, show name, date, duration,
+            age restriction, available seats, image URL, annotation,
+            price range, Pushkin card availability, and buying link.
+
+        Raises:
+            ValueError: If there is a problem obtaining the dictionary
+            with available seats.
         """
         try:
             self._places()
@@ -128,13 +143,16 @@ class ProfticketsInfo:
 
 def get_special_info(month=None, telegram_id=None):
     """
-    Функция для получения всех или персональных спектаклей в указанном месяце.
-    Args:
-        month: Указывается целое число от 1 до 12.
-            Если не указать, по умолчанию будет текущий месяц.
-        telegram_id: Если указать telegram_id, то будет возвращен список
-            спектаклей, которые закреплены за пользователем в config.py.
+    Function to get all or personal performances in a specified month.
 
+    Args:
+        month (int, optional): Specifies an integer between 1 and 12.
+            If not specified, the default is the current month.
+        telegram_id (int, optional): If specified, a list of performances
+            that are assigned to the user in config.py will be returned.
+
+    Returns:
+        str: A list of performances for the specified month.
     """
     p = ProfticketsInfo(month=month, com_id=COM_ID)
     result = p.get_full_info()
@@ -159,16 +177,17 @@ def get_special_info(month=None, telegram_id=None):
                     f'Всего {show_count} {pluralize("спектакль", show_count)}🌚'
                 )
 
-    return f'{msg}\n{total}'
+    return f'{msg}{total}'
 
 
 def get_result_message(seats, show_name, date):
     """
-    Функция для формирования сообщения с информацией о спектакле.
+    Function to create a message with information about a performance.
+
     Args:
-        seats: Количество свободных мест
-        show_name: Название спектакля
-        date: Дата спектакля
+        seats (int): Number of available seats.
+        show_name (str): Name of the performance.
+        date (str): Date of the performance.
 
     """
     if seats == 0:
@@ -182,3 +201,36 @@ def get_result_message(seats, show_name, date):
         f'🎫 {seats_text}\n'
         '------------------------\n'
     )
+
+
+def split_message_by_separator(
+    message, separator='\n------------------------\n', max_length=MAX_MSG_LEN
+):
+    """
+
+    Splits a message into chunks based on the provided separator.
+    Ensures that each chunk is within the maximum length.
+
+    Args:
+        message (str):The message to split.
+        separator (str, optional):The separator to split the message.
+        max_length (int, optional):The maximum length of each chunk.
+            Default is 4096.
+
+    Returns:
+        list: A list of message chunks.
+    """
+    chunks = []
+    current_chunk = ''
+
+    for block in message.split(separator):
+        if len(current_chunk) + len(block) + len(separator) > max_length:
+            chunks.append(current_chunk.rstrip())
+            current_chunk = ''
+
+        current_chunk += block + separator
+
+    if current_chunk:
+        chunks.append(current_chunk.rstrip())
+
+    return chunks
