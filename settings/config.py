@@ -3,14 +3,22 @@ from datetime import datetime
 import pymorphy2
 import pytz
 
-# Moscow time to prevent date errors
-# when deploying on a server with a different time zone.
-moscow_tz = pytz.timezone('Europe/Moscow')
 
-# Get the current Moscow time
-current_time = datetime.now(moscow_tz)
-# Calculate the next month
-next_month = current_time.month + 1
+def get_current_time_and_next_month():
+    """
+    Get the current time in Moscow timezone and calculate the next month.
+
+    Returns:
+        tuple: A tuple containing the current Moscow time and the next month.
+    """
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    current_time = datetime.now(moscow_tz)
+    next_month = current_time.month + 1 if current_time.month < 12 else 1
+    return current_time, next_month
+
+
+# Get the current Moscow time and calculate the next month
+current_time, next_month = get_current_time_and_next_month()
 
 # Initialize the pymorphy2 MorphAnalyzer for word declension
 morph = pymorphy2.MorphAnalyzer()

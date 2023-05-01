@@ -1,5 +1,4 @@
 from datetime import datetime
-
 import httpx
 
 from settings.config import P_SHOWS, pluralize, COM_ID, MAX_MSG_LEN
@@ -176,6 +175,8 @@ def get_special_info(month=None, telegram_id=None):
                 total = (
                     f'Всего {show_count} {pluralize("спектакль", show_count)}🌚'
                 )
+            elif msg == '':
+                total = 'Нет спектаклей в этом месяце.'
 
     return f'{msg}{total}'
 
