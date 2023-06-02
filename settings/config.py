@@ -4,21 +4,39 @@ import pymorphy2
 import pytz
 
 
-def get_current_time_and_next_month():
+def get_next_month():
     """
     Get the current time in Moscow timezone and calculate the next month.
 
     Returns:
         tuple: A tuple containing the current Moscow time and the next month.
     """
+    curent_month = get_current_month()
+    next_month = curent_month + 1 if curent_month < 12 else 1
+    return next_month
+
+
+def get_current_month():
+    """
+    Get current month
+    Returns:
+
+    """
     moscow_tz = pytz.timezone('Europe/Moscow')
-    current_time = datetime.now(moscow_tz)
-    next_month = current_time.month + 1 if current_time.month < 12 else 1
-    return current_time, next_month
+    current_month = datetime.now(moscow_tz).month
+    return current_month
 
 
-# Get the current Moscow time and calculate the next month
-current_time, next_month = get_current_time_and_next_month()
+def get_current_year():
+    """
+    Get current year
+    Returns:
+
+    """
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    current_year = datetime.now(moscow_tz).year
+    return current_year
+
 
 # Initialize the pymorphy2 MorphAnalyzer for word declension
 morph = pymorphy2.MorphAnalyzer()

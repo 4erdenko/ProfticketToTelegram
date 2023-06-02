@@ -2,7 +2,7 @@ import logging
 import sys
 
 from aiogram import executor
-from aiogram.utils.exceptions import TelegramAPIError, NetworkError
+from aiogram.utils.exceptions import NetworkError, TelegramAPIError
 
 from telegram.bot import dp
 

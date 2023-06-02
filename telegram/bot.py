@@ -1,22 +1,15 @@
 import asyncio
 import logging as logger
+import parser.web_parser as pt
 
 import aiogram
 from aiogram import types
 from aiogram.dispatcher.filters import Text
 
-import parser.web_parser as pt
-from settings.config import (
-    TELEGRA_BOT_TOKEN,
-    P_SHOWS,
-    next_month,
-    WAIT_MSG,
-)
-from telegram.keyboard import (
-    keyboard,
-    keyboard_private,
-    keyboard_private_months,
-)
+from settings.config import (P_SHOWS, TELEGRA_BOT_TOKEN, WAIT_MSG,
+                             get_next_month)
+from telegram.keyboard import (keyboard, keyboard_private,
+                               keyboard_private_months)
 
 bot = aiogram.Bot(token=TELEGRA_BOT_TOKEN, parse_mode=types.ParseMode.HTML)
 dp = aiogram.Dispatcher(bot)
@@ -53,7 +46,7 @@ async def choose_person(message: aiogram.types.Message):
         )
     else:
         await message.answer(
-            f'Привет {message.from_user.first_name}\.\n' f'Глянем Афишу?\n',
+            f'Привет {message.from_user.first_name}\\.\n' f'Глянем Афишу?\n',
             reply_markup=keyboard,
             parse_mode='MarkdownV2',
         )
@@ -96,7 +89,7 @@ async def this_month_command(message: aiogram.types.Message):
         )
     except Exception as e:
         await message.answer(
-            f'Произошла ошибка, попробуйте ещё раз через ' f'минутку.'
+            'Произошла ошибка, попробуйте ещё раз через минутку.'
         )
         logger.error(e)
 
@@ -109,6 +102,7 @@ async def next_month_command(message: aiogram.types.Message):
     Returns:
         Sends a message with performance data for the next month.
     """
+    next_month = get_next_month()
     try:
         msg = await message.answer(WAIT_MSG)
         await bot.send_chat_action(
@@ -127,7 +121,7 @@ async def next_month_command(message: aiogram.types.Message):
         )
     except Exception as e:
         await message.answer(
-            f'Произошла ошибка, попробуйте ещё раз через ' f'минутку.'
+            'Произошла ошибка, попробуйте ещё раз через минутку.'
         )
         logger.error(e)
 
@@ -167,7 +161,7 @@ async def this_month_private_command(message: aiogram.types.Message):
         )
     except Exception as e:
         await message.answer(
-            f'Произошла ошибка, попробуйте ещё раз через ' f'минутку.'
+            'Произошла ошибка, попробуйте ещё раз через минутку.'
         )
         logger.error(e)
 
@@ -181,6 +175,7 @@ async def next_month_private_command(message: aiogram.types.Message):
         Sends a message with personal data about performances
         for the next month.
     """
+    next_month = get_next_month()
     try:
         msg = await message.answer(WAIT_MSG)
         await bot.send_chat_action(
@@ -198,7 +193,7 @@ async def next_month_private_command(message: aiogram.types.Message):
         )
     except Exception as e:
         await message.answer(
-            f'Произошла ошибка, попробуйте ещё раз через ' f'минутку.'
+            'Произошла ошибка, попробуйте ещё раз через минутку.'
         )
         logger.error(e)
 

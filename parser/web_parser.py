@@ -1,7 +1,7 @@
-from datetime import datetime
 import httpx
 
-from settings.config import P_SHOWS, pluralize, COM_ID, MAX_MSG_LEN
+from settings.config import (COM_ID, MAX_MSG_LEN, P_SHOWS, get_current_month,
+                             get_current_year, pluralize)
 
 result_dict = {}
 
@@ -13,11 +13,9 @@ class ProfticketsInfo:
 
     def __init__(self, com_id=None, page_num=None, month=None, year=None):
         if month is None:
-            month = datetime.today().month
-        if month is None:
-            month = datetime.today().month
+            month = get_current_month()
         if year is None:
-            year = datetime.today().year
+            year = get_current_year()
         if page_num is None:
             page_num = 1
         if com_id is None:
