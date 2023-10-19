@@ -1,11 +1,11 @@
 import asyncio
 import logging as logger
-import parser.web_parser as pt
 
 import aiogram
 from aiogram import types
 from aiogram.dispatcher.filters import Text
 
+import parser.web_parser as pt
 from settings.config import (P_SHOWS, TELEGRA_BOT_TOKEN, WAIT_MSG,
                              get_next_month)
 from telegram.keyboard import (keyboard, keyboard_private,

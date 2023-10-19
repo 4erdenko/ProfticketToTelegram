@@ -1,12 +1,14 @@
 import asyncio
 import json
-from tenacity import retry, stop_after_attempt, wait_fixed
+
 import httpx
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 
 @retry(stop=stop_after_attempt(5), wait=wait_fixed(10))
 async def fetch_place(client, place_id):
-    url = f'https://widget.profticket.ru/api/company/data/?id={place_id}&language=ru-RU'
+    url = (f'https://widget.profticket.ru/api/company/data/?id={place_id}'
+           f'&language=ru-RU')
     page = await client.get(url)
     return page.json()
 

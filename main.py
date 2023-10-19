@@ -22,9 +22,9 @@ if __name__ == '__main__':
         executor.start_polling(dp, skip_updates=True)
     except NetworkError as e:
         # Log network error
-        logging.error(f"Ошибка сети: {e}")
+        logging.error(f'Ошибка сети: {e}')
     except TelegramAPIError as e:
         # Log Telegram API error
-        logging.error(f"Ошибка Telegram API: {e}")
+        logging.error(f'Ошибка Telegram API: {e}')
         if 'Bad Gateway' in str(e):
             logging.error('Ошибка Bad Gateway')
