@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     PGADMIN_DEFAULT_PASSWORD: str
     PGADMIN_DEFAULT_EMAIL: str
-    # # Channel
-    # CHANNEL_ID: str
+    # Profticket
+    COM_ID: int
 
     class Config:
         if os.environ.get('IN_DOCKER') != '1':
