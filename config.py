@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ADMIN_ID: int
     ADMIN_USERNAME: str
     MAINTENANCE: bool
+    MAX_MSG_LEN: int = 4069
     #
     # Throttling
     TTL_IN_SEC: int = 20
