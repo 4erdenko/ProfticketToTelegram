@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str
     MAINTENANCE: bool
     #
-    # # Throttling
-    # TTL_IN_SEC: int = 20
-    # MAX_RATE_SEC_IN_TTL: int = 5
+    # Throttling
+    TTL_IN_SEC: int = 20
+    MAX_RATE_SEC_IN_TTL: int = 5
     # # DB
     DB_URL: str
     POSTGRES_DB: str
