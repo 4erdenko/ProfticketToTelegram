@@ -1,7 +1,27 @@
+# import pymorphy2
+#
 # from services.profticket.profticket_api import ProfticketsInfo
 # from settings import config
 # from telegram.tg_utils import get_result_message
 #
+# # Initialize the pymorphy2 MorphAnalyzer for word declension
+# morph = pymorphy2.MorphAnalyzer()
+#
+#
+# def pluralize(word, count):
+#     """
+#     Function to return the correct plural form of a word
+#     depending on the count.
+#
+#     Args:
+#         word (str): The word to pluralize.
+#         count (int): The count to determine the correct plural form.
+#
+#     Returns:
+#         str: The pluralized word.
+#     """
+#     parsed_word = morph.parse(word)[0]
+#     return parsed_word.make_agree_with_number(count).word
 #
 # def get_special_info(profticket: ProfticketsInfo, month=None,
 #                      telegram_id=None):

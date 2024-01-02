@@ -1,5 +1,7 @@
+import pymorphy2
 
-
+from config import settings
+from settings import config
 
 def get_result_message(seats, show_name, date):
     """
@@ -25,7 +27,8 @@ def get_result_message(seats, show_name, date):
 
 
 def split_message_by_separator(
-    message, separator='\n------------------------\n', max_length=MAX_MSG_LEN
+    message, separator='\n------------------------\n',
+        max_length=settings.MAX_MSG_LEN
 ):
     """
 
