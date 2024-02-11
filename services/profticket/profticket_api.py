@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 import httpx
-from tenacity import retry, stop_after_attempt
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class ProfticketsInfo:
             f'&name=&language=ru-RU'
         )
 
-    @retry(stop=stop_after_attempt(10))
+    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
     async def _load_data(self):
         page_num = 1
         items = []
@@ -57,7 +57,7 @@ class ProfticketsInfo:
             logger.info(f'Len items for page {page_num}: {len(new_items)}')
         return items
 
-    @retry(stop=stop_after_attempt(10))
+    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
     async def _places(self):
         places_url = f'{self.EVENT_DATA_URL}{self.com_id}/'
         response = await self.client.get(places_url)
@@ -87,7 +87,7 @@ class ProfticketsInfo:
         await asyncio.gather(*tasks)
         logger.info('Get len buy links')
 
-    @retry(stop=stop_after_attempt(10))
+    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
     async def _get_event_actors(self, event):
         show_id = event.get('show').get('show_id')
         actors_url = (
