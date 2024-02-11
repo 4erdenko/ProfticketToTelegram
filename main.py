@@ -10,6 +10,7 @@ from config import settings
 from services.profticket.profticket_api import ProfticketsInfo
 from telegram.handlers import (maintenance_handler, personal_handlers,
                                throttling_handler, user_handlers)
+from telegram.keyboards.native_menu import set_native_menu
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS
 from telegram.middlewares.banhammer import BanMiddleware
 from telegram.middlewares.db import DbSessionMiddleware
@@ -70,6 +71,7 @@ async def main():
     logger.info(LEXICON_LOGS['BOT_STARTED'].format(settings.ADMIN_ID))
     await bot.delete_webhook(drop_pending_updates=True)
     dp.startup.register(on_startup)
+    await set_native_menu(bot)
     await dp.start_polling(bot)
 
 
