@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 async def get_user(session: AsyncSession, user_id: int) -> Type[User] | None:
     return await session.get(User, user_id)
 
+
 async def search_count(session: AsyncSession, user_id: int):
     user = await get_user(session, user_id)
     if user.search_count is not None:

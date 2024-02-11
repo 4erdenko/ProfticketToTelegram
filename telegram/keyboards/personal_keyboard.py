@@ -1,5 +1,4 @@
-from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
-from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 
 async def personal_keyboard():

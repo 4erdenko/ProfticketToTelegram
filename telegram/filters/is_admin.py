@@ -13,5 +13,6 @@ class IsAdmin(BaseFilter):
     their ID to the admin ID defined in the settings.
 
     """
+
     async def __call__(self, message: Message) -> bool:
         return message.from_user.id == settings.ADMIN_ID

@@ -1,5 +1,3 @@
-from config import settings
-
 LEXICON_RU: dict = {
     'WAIT_MSG': 'Пожалуйста, подождите, идёт сбор данных.',
     'NONE_SHOWS_THIS_MONTH': 'Спектаклей в этом месяце нет.',

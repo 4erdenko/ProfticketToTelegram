@@ -18,6 +18,7 @@ def get_current_month_year():
     current_time = datetime.now(moscow_tz)
     return current_time.month, current_time.year
 
+
 def get_next_month_year():
     """
     Get the next month and year based on the current time in Moscow timezone.
@@ -28,6 +29,8 @@ def get_next_month_year():
     moscow_tz = pytz.timezone('Europe/Moscow')
     next_time = datetime.now(moscow_tz) + relativedelta(months=+1)
     return next_time.month, next_time.year
+
+
 def get_result_message(seats, show_name, date, buy_link):
     """
     Function to create a message with information about a performance.
@@ -53,8 +56,9 @@ def get_result_message(seats, show_name, date, buy_link):
 
 
 def split_message_by_separator(
-    message, separator='\n------------------------\n',
-        max_length=settings.MAX_MSG_LEN
+    message,
+    separator='\n------------------------\n',
+    max_length=settings.MAX_MSG_LEN,
 ):
     """
 

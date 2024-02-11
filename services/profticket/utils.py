@@ -17,4 +17,3 @@ def pluralize(word, count):
     """
     parsed_word = morph.parse(word)[0]
     return parsed_word.make_agree_with_number(count).word
-

@@ -18,7 +18,6 @@ class UserLoggingMiddleware(BaseMiddleware):
         self, update: types.Update, data: Dict[str, Any]
     ) -> None:
         session = data['session']
-        bot = update.bot
         if update.message:
             message = update.message
             user = await session.get(User, message.from_user.id)

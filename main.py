@@ -61,13 +61,11 @@ async def main():
     dp.include_router(user_handlers.user_router)
     dp.include_router(personal_handlers.personal_user_router)
 
-
     dp.update.outer_middleware(DbSessionMiddleware(session_pool=sessionmaker))
     dp.update.outer_middleware(ThrottlingMiddleware())
     dp.update.outer_middleware(BanMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
     dp.update.middleware(ProfticketSessionMiddleware(profticket))
-
 
     logger.info(LEXICON_LOGS['BOT_STARTED'].format(settings.ADMIN_ID))
     await bot.delete_webhook(drop_pending_updates=True)

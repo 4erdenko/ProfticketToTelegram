@@ -1,15 +1,13 @@
 from datetime import datetime
 
-from sqlalchemy import (BigInteger, Boolean, Column, DateTime, ForeignKey,
-                        Integer, String, Table, event, func)
-from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.orm import relationship
+from sqlalchemy import BigInteger, Boolean, Column, Integer, String, func
 
 from telegram.db import Base
 
 
 def current_timestamp():
     return int(datetime.now().timestamp())
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -44,4 +42,3 @@ class User(Base):
     @bot_blocked_date.setter
     def bot_blocked_date(self, value):
         self._bot_blocked_date = int(value.timestamp()) if value else None
-
