@@ -1,6 +1,7 @@
 import logging
 
 import httpx
+from tenacity import retry, stop_after_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class ProfticketsInfo:
             f'&name=&language=ru-RU'
         )
 
+    @retry(stop=stop_after_attempt(5))
     async def _load_data(self):
         page_num = 1
         items = []
@@ -54,6 +56,7 @@ class ProfticketsInfo:
             logger.info(f'Len items for page {page_num}: {len(new_items)}')
         return items
 
+    @retry(stop=stop_after_attempt(5))
     async def _places(self):
         places_url = f'{self.EVENT_DATA_URL}{self.com_id}/'
         response = await self.client.get(places_url)
@@ -65,6 +68,7 @@ class ProfticketsInfo:
         }
         logger.info('Get free places')
 
+    @retry(stop=stop_after_attempt(5))
     async def _get_buy_link(self, items):
         for get_info in items:
             for event in get_info.get('events'):
@@ -78,6 +82,7 @@ class ProfticketsInfo:
 
         logger.info('Get len buy links')
 
+    @retry(stop=stop_after_attempt(5))
     async def _get_show_actors(self, items):
         for get_info in items:
             for event in get_info.get('events'):
@@ -127,6 +132,3 @@ class ProfticketsInfo:
             return result
         except Exception as e:
             raise SystemError(f'Ошибка при получении полной информации: {e}')
-
-    async def close(self):
-        await self.client.aclose()
