@@ -1,7 +1,7 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,8 @@ from services.profticket.profticket_api import ProfticketsInfo
 from services.profticket.profticket_bot_manager import get_all_shows_info
 from telegram.db.user_operations import search_count
 from telegram.keyboards.main_keyboard import main_keyboard
-from telegram.lexicon.lexicon_ru import LEXICON_COMMANDS_RU, LEXICON_RU
+from telegram.lexicon.lexicon_ru import (LEXICON_COMMANDS_RU, LEXICON_LOGS,
+                                         LEXICON_RU)
 from telegram.tg_utils import (get_current_month_year, get_next_month_year,
                                send_chunks_edit)
 
@@ -23,6 +24,13 @@ async def cmd_start(message: Message, session: AsyncSession):
         LEXICON_COMMANDS_RU['/start'],
         reply_markup=await main_keyboard(message, session),
     )
+
+
+@user_router.message(Command('help'))
+async def cmd_start(message: Message):
+    logger.info(LEXICON_LOGS['LOG_MSH_HELP_COMMAND'].format(
+        message.from_user.id))
+    await message.answer(LEXICON_RU['HELP_CONTACT'])
 
 
 @user_router.message(F.text == 'Этот месяц')

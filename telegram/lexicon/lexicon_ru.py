@@ -1,3 +1,5 @@
+from config import settings
+
 LEXICON_RU: dict = {
     'WAIT_MSG': 'Пожалуйста, подождите, идёт сбор данных.',
     'NONE_SHOWS_THIS_MONTH': 'Спектаклей в этом месяце нет.',
@@ -12,6 +14,8 @@ LEXICON_RU: dict = {
                 '7. Повторяйте эту последовательность в течение 20 секунд.\n'
                 '\n',
     'MAINTENANCE': 'Бот на техническом обслуживании.',
+    'HELP_CONTACT': f'Если нужна помощь, напиши сюда: '
+                    f'{settings.ADMIN_USERNAME}'
 
 }
 
@@ -25,4 +29,9 @@ LEXICON_LOGS: dict = {
     'SESSION_MAKER_INITIALIZED': 'Session maker инициализирован',
     'PROFTICKET_INITIALIZED': 'Successfully initialize profticket client',
     'LOG_MSG_ERROR_WHEN_START_MSG_TO_ADMIN': 'Error: {}',
+}
+
+LEXICON_NATIVE_COMMANDS_RU: dict[str, str] = {
+    '/start': '🔁 Перезагрузка бота',
+    '/help': '🆘 Нужна помощь!'
 }
