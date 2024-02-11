@@ -1,9 +1,34 @@
-import pymorphy2
+import asyncio
+from datetime import datetime
+
+import pytz
+from dateutil.relativedelta import relativedelta
 
 from config import settings
-from settings import config
 
-def get_result_message(seats, show_name, date):
+
+def get_current_month_year():
+    """
+    Get the current time in Moscow timezone.
+
+    Returns:
+        tuple: A tuple containing the current month and year.
+    """
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    current_time = datetime.now(moscow_tz)
+    return current_time.month, current_time.year
+
+def get_next_month_year():
+    """
+    Get the next month and year based on the current time in Moscow timezone.
+
+    Returns:
+        tuple: A tuple containing the next month and year.
+    """
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    next_time = datetime.now(moscow_tz) + relativedelta(months=+1)
+    return next_time.month, next_time.year
+def get_result_message(seats, show_name, date, buy_link):
     """
     Function to create a message with information about a performance.
 
@@ -11,12 +36,13 @@ def get_result_message(seats, show_name, date):
         seats (int): Number of available seats.
         show_name (str): Name of the performance.
         date (str): Date of the performance.
+        buy_link (str): Ticket purchase link.
 
     """
     if seats == 0:
         seats_text = '<code>SOLD OUT</code>'
     else:
-        seats_text = f'Билетов: <code>{seats}</code>'
+        seats_text = f'Билетов: <a href="{buy_link}">{seats}</a>'
 
     return (
         f'📅<strong> {date}</strong>\n'
@@ -58,3 +84,27 @@ def split_message_by_separator(
         chunks.append(current_chunk.rstrip())
 
     return chunks
+
+
+async def send_chunks_edit(chat_id, message, text, **kwargs):
+    """
+    Sends a message in chunks. The first chunk is sent using msg.edit_text,
+    and the subsequent chunks are sent using message.answer.
+
+    Args:
+        chat_id (int): The ID of the chat where the message will be sent.
+        message (aiogram.types.Message): The message object.
+        text (str): The message text to be sent.
+        **kwargs: Additional arguments to pass to the message
+            sending functions.
+
+    Returns:
+        None
+    """
+    chunks = split_message_by_separator(text)
+
+    if chunks:
+        await message.edit_text(chunks.pop(0), **kwargs)
+        for chunk in chunks:
+            await message.answer(chunk, **kwargs)
+            await asyncio.sleep(1)
