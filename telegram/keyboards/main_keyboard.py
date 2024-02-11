@@ -22,8 +22,8 @@ async def main_keyboard(message: Message, session: AsyncSession):
 
     menu_keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text='Этот месяц')],
-            [KeyboardButton(text='Следующий месяц')],
+            [KeyboardButton(text='Этот месяц'),
+             KeyboardButton(text='Следующий месяц')],
         ],
         resize_keyboard=True,
         is_persistent=True,
