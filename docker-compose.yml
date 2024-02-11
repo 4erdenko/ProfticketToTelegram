@@ -24,5 +24,15 @@ services:
     image: 4erdenko/profticket_to_tg
     <<: *default-env
 
+  rotating_tor_proxy:
+    image: zhaowde/rotating-tor-http-proxy
+    container_name: proxy
+    ports:
+      - "3128:3128" # Proxy port
+    environment:
+      - TOR_INSTANCES=10
+      - TOR_REBUILD_INTERVAL=3600
+    restart: unless-stopped
+
 volumes:
   pgdata:
