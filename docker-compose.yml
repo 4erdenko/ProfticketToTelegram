@@ -21,7 +21,7 @@ services:
       - postgres
     restart: unless-stopped
     container_name: profticket_bot
-    image: ghcr.io/4erdenko/frdm_bot/frdm_bot:latest
+    image: 4erdenko/profticket_to_tg
     <<: *default-env
 
 volumes:

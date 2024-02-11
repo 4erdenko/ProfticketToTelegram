@@ -50,7 +50,7 @@ async def main():
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     logger.info(LEXICON_LOGS['SESSION_MAKER_INITIALIZED'])
 
-    bot = Bot(token=settings.TEST_BOT_TOKEN, parse_mode='HTML')
+    bot = Bot(token=settings.BOT_TOKEN, parse_mode='HTML')
     dp = Dispatcher(maintenance_mode=settings.MAINTENANCE)
 
     profticket = ProfticketsInfo(settings.COM_ID)

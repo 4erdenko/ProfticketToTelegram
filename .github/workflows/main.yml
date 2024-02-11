@@ -35,21 +35,6 @@ jobs:
       - name: Run Docker container
         run: docker run -d -e BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} --name prof_bot profticket_bot_image python3 main.py
 
-      - name: Check if container is still running
-        run: |
-          if ! docker ps --filter "name=prof_bot" --filter "status=running" | grep -q prof_bot; then
-            echo "Container stopped unexpectedly";
-            exit 1;
-          fi
-
-      - name: Wait for bot to initialize
-        run: sleep 10
-
-      - name: Check Docker logs
-        run: docker logs prof_bot
-
-      - name: Stop Docker container
-        run: docker stop prof_bot
   build-push:
     runs-on: ubuntu-latest
     needs: build-test
@@ -76,3 +61,36 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:latest
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy code via ssh
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          source: "docker-compose.yml"
+          target: "${{ secrets.FOLDER_PATH }}"
+
+      - name: Executing remote ssh commands to deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          script: |
+            cd ${{ secrets.FOLDER_PATH }}
+            cat <<EOF > .env
+            ${{ secrets.ENV }}
+            EOF
+            sudo docker compose up -d
+            sudo docker compose exec bot_service alembic upgrade head
+            sudo docker image prune -f
