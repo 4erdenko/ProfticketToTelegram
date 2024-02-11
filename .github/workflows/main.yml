@@ -6,16 +6,79 @@ on:
       - master
 
 jobs:
-  # Ensure that when you comment out a job like this, the indentation is correct.
-  # The 'deploy' job should start at the same level of indentation as 'build-push'.
+  flake8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
 
-  deploy:
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip 
+          pip install flake8==6.0.0 flake8-isort==6.0.0
+          pip install -r ./requirements.txt
+      - name: Test with flake8
+        run: |
+          python -m flake8 .
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # The following step should be indented 2 spaces within 'steps'.
+      - name: Build Docker image
+        run: docker build -t profticket_bot_image .
+
+      - name: Run Docker container
+        run: docker run -d -e BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} --name prof_bot profticket_bot_image python3 main.py
+
+  build-push:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      -
+        name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:latest
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy code via ssh
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.HOST_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          source: "docker-compose.yml"
+          target: "${{ secrets.FOLDER_PATH }}"
+
       - name: Executing remote ssh commands to deploy
         uses: appleboy/ssh-action@master
         with:
@@ -25,6 +88,9 @@ jobs:
           passphrase: ${{ secrets.PASSPHRASE }}
           script: |
             cd ${{ secrets.FOLDER_PATH }}
-            # Make sure that any commented lines here maintain the proper indentation.
-            # Indentation within 'script' should also be consistent.
-            sudo docker compose down
+            cat <<EOF > .env
+            ${{ secrets.ENV }}
+            EOF
+            sudo docker compose up -d
+            sudo docker compose exec bot_service alembic upgrade head
+            sudo docker image prune -f

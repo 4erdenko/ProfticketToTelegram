@@ -19,7 +19,7 @@ class ProfticketsInfo:
         self.com_id = com_id
         self.month = None
         self.year = None
-        self.client = httpx.AsyncClient(proxies="http://proxy:3128")
+        self.client = httpx.AsyncClient()
         logger.info(f'Initializing with com_id: {com_id}')
 
     def set_date(self, month, year):
