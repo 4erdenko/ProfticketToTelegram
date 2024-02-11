@@ -1,40 +1,42 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.profticket.profticket_api import ProfticketsInfo
-from services.profticket.profticket_bot_manager import get_all_shows_info
+from services.profticket.profticket_bot_manager import get_personal_shows_info
 from telegram.db.user_operations import search_count
 from telegram.keyboards.main_keyboard import main_keyboard
-from telegram.lexicon.lexicon_ru import LEXICON_COMMANDS_RU, LEXICON_RU
+from telegram.keyboards.personal_keyboard import personal_keyboard
+from telegram.lexicon.lexicon_ru import LEXICON_RU
 from telegram.tg_utils import (get_current_month_year, get_next_month_year,
                                send_chunks_edit)
 
-user_router = Router(name=__name__)
+personal_user_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
 
-
-@user_router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession):
+@personal_user_router.message(F.text == 'Мои спектакли')
+async def cmd_my_shows(message: Message):
     await message.answer(
-        LEXICON_COMMANDS_RU['/start'], reply_markup=await main_keyboard(
-            message, session)
+        'Выберите месяц', reply_markup=await personal_keyboard()
     )
 
+@personal_user_router.message(F.text == '↩️')
+async def cmd_back_to_main_menu(message: Message, session: AsyncSession):
+    await message.answer(
+        'Главное меню', reply_markup=await main_keyboard(message, session)
+    )
 
-
-@user_router.message(F.text == 'Этот месяц')
-async def cmd_this_month(message: Message, session: AsyncSession,
-                         profticket: ProfticketsInfo):
+@personal_user_router.message(F.text == 'Этот')
+async def cmd_this(message: Message, session: AsyncSession,
+                   profticket:ProfticketsInfo):
     await search_count(session, message.from_user.id)
     month, year = get_current_month_year()
     try:
         msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        await send_chunks_edit(message.chat.id, msg, await get_all_shows_info(
-            profticket, month, year))
+        await send_chunks_edit(message.chat.id, msg, await get_personal_shows_info(
+            profticket, session, message, month, year))
 
         logger.info(
             f'{message.from_user.full_name} '
@@ -48,15 +50,15 @@ async def cmd_this_month(message: Message, session: AsyncSession,
         logger.error(e)
 
 
-@user_router.message(F.text == 'Следующий месяц')
-async def next_month_command(message: Message, session: AsyncSession,
-                             profticket: ProfticketsInfo):
+@personal_user_router.message(F.text == 'Следующий')
+async def cmd_this(message: Message, session: AsyncSession,
+                   profticket:ProfticketsInfo):
     await search_count(session, message.from_user.id)
     month, year = get_next_month_year()
     try:
         msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        await send_chunks_edit(message.chat.id, msg, await get_all_shows_info(
-            profticket, month, year))
+        await send_chunks_edit(message.chat.id, msg, await get_personal_shows_info(
+            profticket, session, message, month, year))
 
         logger.info(
             f'{message.from_user.full_name} '
