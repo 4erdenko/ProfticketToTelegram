@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 from aiogram import BaseMiddleware
 from cachetools import TTLCache
 
-from telegram.db import User
 from config import settings
+from telegram.db import User
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

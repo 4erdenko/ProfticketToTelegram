@@ -26,7 +26,7 @@ class UserLoggingMiddleware(BaseMiddleware):
                 user = User(
                     user_id=message.from_user.id,
                     username=message.from_user.username,
-                    full_name=message.from_user.full_name,
+                    bot_full_name=message.from_user.full_name,
                 )
                 session.add(user)
                 await session.commit()
