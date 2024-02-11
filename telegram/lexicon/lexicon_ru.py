@@ -24,11 +24,12 @@ LEXICON_COMMANDS_RU: dict = {
 }
 
 LEXICON_LOGS: dict = {
-    'BOT_STARTED': 'Бот запущен и готов к работе. Администратор: {}',
-    'ENGINE_CREATED': 'Движок базы данных успешно создан',
-    'SESSION_MAKER_INITIALIZED': 'Session maker инициализирован',
+    'BOT_STARTED': 'Bot has been launched and is ready to work. Administrator: {}',
+    'ENGINE_CREATED': 'The database engine was created successfully',
+    'SESSION_MAKER_INITIALIZED': 'Session maker has been initialized',
     'PROFTICKET_INITIALIZED': 'Successfully initialize profticket client',
     'LOG_MSG_ERROR_WHEN_START_MSG_TO_ADMIN': 'Error: {}',
+    'LOG_MSH_HELP_COMMAND': 'UserID {} using /help command.',
 }
 
 LEXICON_NATIVE_COMMANDS_RU: dict[str, str] = {
