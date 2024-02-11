@@ -52,7 +52,7 @@ async def get_personal_shows_info(
     year: int,
 ):
     user = await get_user(session, message.from_user.id)
-    user_fio = user.spectacle_full_name.lower()
+    user_fio = user.spectacle_full_name.lower().strip()
     return await collect_shows_info(
         profticket, month, year, actor_filter=user_fio
     )
