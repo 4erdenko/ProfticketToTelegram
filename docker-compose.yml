@@ -1,0 +1,28 @@
+version: "3.8"
+x-common:
+  &default-env
+  env_file:
+    - .env
+
+services:
+  postgres:
+    container_name: db
+    restart: unless-stopped
+    image: postgres:latest
+    <<: *default-env
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  bot_service:
+    pull_policy: always
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    container_name: profticket_bot
+    image: ghcr.io/4erdenko/frdm_bot/frdm_bot:latest
+    <<: *default-env
+
+volumes:
+  pgdata:

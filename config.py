@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
-    PGADMIN_DEFAULT_PASSWORD: str
-    PGADMIN_DEFAULT_EMAIL: str
     # Profticket
     COM_ID: int
 

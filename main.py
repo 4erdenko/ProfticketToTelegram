@@ -1,33 +1,3 @@
-# import logging
-# import sys
-#
-# from aiogram import executor
-# from aiogram.utils.exceptions import NetworkError, TelegramAPIError
-#
-# from telegram.bot import dp
-#
-# if __name__ == '__main__':
-#     # Set up logging with a basic configuration
-#     logging.basicConfig(
-#         level=logging.INFO,
-#         datefmt='%Y-%m-%d %H:%M:%S',
-#         format='%(asctime)s [%(levelname)s]: %(message)s',
-#         handlers=[
-#             logging.StreamHandler(stream=sys.stdout),
-#         ],
-#     )
-#
-#     # Try to start the bot's polling process
-#     try:
-#         executor.start_polling(dp, skip_updates=True)
-#     except NetworkError as e:
-#         # Log network error
-#         logging.error(f"Ошибка сети: {e}")
-#     except TelegramAPIError as e:
-#         # Log Telegram API error
-#         logging.error(f"Ошибка Telegram API: {e}")
-#         if 'Bad Gateway' in str(e):
-#             logging.error('Ошибка Bad Gateway')
 import asyncio
 import logging
 import sys
@@ -36,12 +6,15 @@ import coloredlogs
 from aiogram import Bot, Dispatcher
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-
 from config import settings
-from telegram.handlers import user_handlers
+from services.profticket.profticket_api import ProfticketsInfo
+from telegram.handlers import (maintenance_handler, personal_handlers,
+                               throttling_handler, user_handlers)
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS
+from telegram.middlewares.banhammer import BanMiddleware
 from telegram.middlewares.db import DbSessionMiddleware
 from telegram.middlewares.logging_to_db import UserLoggingMiddleware
+from telegram.middlewares.profticket import ProfticketSessionMiddleware
 from telegram.middlewares.throttling import ThrottlingMiddleware
 
 
@@ -80,14 +53,20 @@ async def main():
     bot = Bot(token=settings.TEST_BOT_TOKEN, parse_mode='HTML')
     dp = Dispatcher(maintenance_mode=settings.MAINTENANCE)
 
+    profticket = ProfticketsInfo(settings.COM_ID)
+    logger.info(LEXICON_LOGS['PROFTICKET_INITIALIZED'])
 
-
+    dp.include_router(maintenance_handler.maintenance_router)
+    dp.include_router(throttling_handler.throttling_router)
     dp.include_router(user_handlers.user_router)
+    dp.include_router(personal_handlers.personal_user_router)
 
 
     dp.update.outer_middleware(DbSessionMiddleware(session_pool=sessionmaker))
     dp.update.outer_middleware(ThrottlingMiddleware())
+    dp.update.outer_middleware(BanMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
+    dp.update.middleware(ProfticketSessionMiddleware(profticket))
 
 
     logger.info(LEXICON_LOGS['BOT_STARTED'].format(settings.ADMIN_ID))
