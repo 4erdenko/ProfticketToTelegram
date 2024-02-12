@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     #
     # Throttling
     TTL_IN_SEC: int = 20
-    MAX_RATE_SEC_IN_TTL: int = 5
+    MAX_RATE_SEC_IN_TTL: int = 10
     # # DB
     DB_URL: str
     POSTGRES_DB: str
