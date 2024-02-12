@@ -1,7 +1,9 @@
 import asyncio
+import string
 from datetime import datetime
 
 import pytz
+from aiogram.types import Message
 from dateutil.relativedelta import relativedelta
 
 from config import settings
@@ -56,9 +58,9 @@ def get_result_message(seats, show_name, date, buy_link):
 
 
 def split_message_by_separator(
-    message,
-    separator='\n------------------------\n',
-    max_length=settings.MAX_MSG_LEN,
+        message,
+        separator='\n------------------------\n',
+        max_length=settings.MAX_MSG_LEN,
 ):
     """
 
@@ -112,3 +114,13 @@ async def send_chunks_edit(chat_id, message, text, **kwargs):
         for chunk in chunks:
             await message.answer(chunk, **kwargs)
             await asyncio.sleep(1)
+
+
+async def check_text(message: Message):
+    text = message.text
+    if isinstance(text, str):
+        text = text.lower().strip()
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        if len(text.split(' ')) == 2:
+            return text
+    return None
