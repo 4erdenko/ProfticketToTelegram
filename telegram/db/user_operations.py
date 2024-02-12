@@ -19,3 +19,10 @@ async def search_count(session: AsyncSession, user_id: int):
     else:
         user.search_count = 1
     await session.commit()
+
+
+async def set_spectacle_fio(session: AsyncSession, user_id: int,
+                            spectacle_fio: str):
+    user = await get_user(session, user_id)
+    user.spectacle_full_name = spectacle_fio
+    await session.commit()
