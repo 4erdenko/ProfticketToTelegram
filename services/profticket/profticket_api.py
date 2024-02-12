@@ -4,6 +4,8 @@ import logging
 import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,14 +38,20 @@ class ProfticketsInfo:
             f'&name=&language=ru-RU'
         )
 
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
+    @retry(stop=stop_after_attempt(settings.STOP_AFTER_ATTEMPT),
+           wait=wait_fixed(settings.WAIT_FIXED))
+    async def _make_request(self, url):
+        response = await self.client.get(url)
+        response.raise_for_status()
+        return response
+
     async def _load_data(self):
         page_num = 1
         items = []
         logger.info(f'Loading data for page: {page_num}')
         while True:
             url = self._create_url(page_num)
-            response = await self.client.get(url)
+            response = await self._make_request(url)
             response_json = response.json()
             if 'response' not in response_json:
                 raise ValueError('Проблемы с получением данных с сервера')
@@ -57,10 +65,9 @@ class ProfticketsInfo:
             logger.info(f'Len items for page {page_num}: {len(new_items)}')
         return items
 
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
     async def _places(self):
         places_url = f'{self.EVENT_DATA_URL}{self.com_id}/'
-        response = await self.client.get(places_url)
+        response = await self._make_request(places_url)
         places_ben = response.json()
         places_events = places_ben.get('events')
         self.free_places = {
@@ -87,14 +94,13 @@ class ProfticketsInfo:
         await asyncio.gather(*tasks)
         logger.info('Get len buy links')
 
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(3))
     async def _get_event_actors(self, event):
         show_id = event.get('show').get('show_id')
         actors_url = (
             f'{self.SHOW_URL}?company_id'
             f'={self.com_id}&show_id={show_id}'
         )
-        response = await self.client.get(actors_url)
+        response = await self._make_request(actors_url)
         actors_data = response.json()
         actors_list = (
             actors_data.get('response')

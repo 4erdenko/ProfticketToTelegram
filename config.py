@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     # Profticket
     COM_ID: int
+    STOP_AFTER_ATTEMPT: int = 5
+    WAIT_FIXED: int = 3
 
     class Config:
         if os.environ.get('IN_DOCKER') != '1':
