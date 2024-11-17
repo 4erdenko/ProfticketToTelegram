@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     COM_ID: int
     STOP_AFTER_ATTEMPT: int = 5
     WAIT_FIXED: int = 3
+    PROXY_URL: str
 
     class Config:
         if os.environ.get('IN_DOCKER') != '1':
