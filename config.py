@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Bot
+    IN_DOCKER: str
     BOT_TOKEN: str
     TEST_BOT_TOKEN: str
     ADMIN_ID: int

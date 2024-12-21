@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import os
 import sys
 
 import coloredlogs
 from aiogram import Bot, Dispatcher
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from config import settings
@@ -32,6 +34,18 @@ async def on_startup(bot: Bot):
         )
 
 
+def get_env():
+    load_dotenv()
+    return os.getenv('IN_DOCKER', 'true')
+
+
+def get_token():
+    if get_env() != 'true':
+        return settings.TEST_BOT_TOKEN
+    else:
+        return settings.BOT_TOKEN
+
+
 async def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -52,7 +66,7 @@ async def main():
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
     logger.info(LEXICON_LOGS['SESSION_MAKER_INITIALIZED'])
 
-    bot = Bot(token=settings.BOT_TOKEN, parse_mode='HTML')
+    bot = Bot(token=get_token(), parse_mode='HTML')
     dp = Dispatcher(maintenance_mode=settings.MAINTENANCE)
 
     profticket = ProfticketsInfo(settings.COM_ID)
