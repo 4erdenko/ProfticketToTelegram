@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     STOP_AFTER_ATTEMPT: int = 5
     WAIT_FIXED: int = 3
     PROXY_URL: str
+    # Show Update Service
+    UPDATE_INTERVAL: int = 600
+    ERROR_RETRY_INTERVAL: int = 60
+    MAX_DATA_AGE: int = 3600
+    MAX_CONSECUTIVE_ERRORS: int = 3
 
     class Config:
         if os.environ.get('IN_DOCKER') != '1':
