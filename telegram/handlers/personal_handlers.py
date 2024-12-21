@@ -7,9 +7,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.profticket.profticket_api import ProfticketsInfo
-from services.profticket.profticket_bot_manager import get_personal_shows_info
-from telegram.db.user_operations import search_count, set_spectacle_fio
+from telegram.db.user_operations import (get_shows_from_db, get_user,
+                                         search_count, set_spectacle_fio)
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.keyboards.personal_keyboard import personal_keyboard
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
@@ -32,7 +31,6 @@ async def cmd_cancel(
         LEXICON_RU['MAIN_MENU'],
         reply_markup=await main_keyboard(message, session),
     )
-
     await state.clear()
 
 
@@ -40,9 +38,7 @@ async def cmd_cancel(
     or_f(F.text == LEXICON_BUTTONS_RU['/set_fighter'], Command('set_actor'))
 )
 async def cmd_choose_fighter(message: Message, state: FSMContext):
-    await message.answer(
-        text=LEXICON_RU['SET_NAME'],
-    )
+    await message.answer(text=LEXICON_RU['SET_NAME'])
     await state.set_state(ChooseYourFighter.set_your_fighter)
 
 
@@ -81,20 +77,19 @@ async def cmd_back_to_main_menu(message: Message, session: AsyncSession):
 
 
 @personal_user_router.message(F.text == 'Этот')
-async def cmd_this(
-    message: Message, session: AsyncSession, profticket: ProfticketsInfo
-):
+async def cmd_this(message: Message, session: AsyncSession):
     await search_count(session, message.from_user.id)
     month, year = get_current_month_year()
     try:
         msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        await send_chunks_edit(
-            message.chat.id,
-            msg,
-            await get_personal_shows_info(
-                profticket, session, message, month, year
-            ),
+        user = await get_user(session, message.from_user.id)
+        shows_info = await get_shows_from_db(
+            session,
+            month,
+            year,
+            actor_filter=user.spectacle_full_name.lower().strip(),
         )
+        await send_chunks_edit(message.chat.id, msg, shows_info)
 
         logger.info(
             f'{message.from_user.full_name} '
@@ -109,20 +104,19 @@ async def cmd_this(
 
 
 @personal_user_router.message(F.text == 'Следующий')
-async def cmd_this(
-    message: Message, session: AsyncSession, profticket: ProfticketsInfo
-):
+async def cmd_next(message: Message, session: AsyncSession):
     await search_count(session, message.from_user.id)
     month, year = get_next_month_year()
     try:
         msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        await send_chunks_edit(
-            message.chat.id,
-            msg,
-            await get_personal_shows_info(
-                profticket, session, message, month, year
-            ),
+        user = await get_user(session, message.from_user.id)
+        shows_info = await get_shows_from_db(
+            session,
+            month,
+            year,
+            actor_filter=user.spectacle_full_name.lower().strip(),
         )
+        await send_chunks_edit(message.chat.id, msg, shows_info)
 
         logger.info(
             f'{message.from_user.full_name} '
