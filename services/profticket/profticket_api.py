@@ -165,7 +165,7 @@ class ProfticketsInfo:
         self.month: Optional[int] = None
         self.year: Optional[int] = None
 
-        proxies = {'http://': self.PROXY_URL, 'https://': self.PROXY_URL}
+        # proxies = {'http://': self.PROXY_URL, 'https://': self.PROXY_URL}
 
         self.user_agent_provider = UserAgentProvider()
 
@@ -552,7 +552,7 @@ class ProfticketsInfo:
 
             batch_size = 5
             for i in range(0, len(show_tasks), batch_size):
-                batch = show_tasks[i : i + batch_size]
+                batch = show_tasks[i: i + batch_size]
                 if batch:
                     await asyncio.gather(*batch)
                     await asyncio.sleep(0.5)
