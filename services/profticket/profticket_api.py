@@ -179,7 +179,7 @@ class ProfticketsInfo:
                 'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
                 'Connection': 'keep-alive',
             },
-            proxies=proxies,
+            # proxies=proxies,
             verify=False,
         )
         self._request_semaphore = asyncio.Semaphore(concurrent_requests)
@@ -552,7 +552,7 @@ class ProfticketsInfo:
 
             batch_size = 5
             for i in range(0, len(show_tasks), batch_size):
-                batch = show_tasks[i: i + batch_size]
+                batch = show_tasks[i : i + batch_size]
                 if batch:
                     await asyncio.gather(*batch)
                     await asyncio.sleep(0.5)
