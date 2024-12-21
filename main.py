@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from config import settings
 from services.profticket.profticket_api import ProfticketsInfo
+from services.profticket.profticket_snapshoter import ShowUpdateService
 from telegram.handlers import (maintenance_handler, personal_handlers,
                                throttling_handler, user_handlers)
 from telegram.keyboards.native_menu import set_native_menu
@@ -67,6 +68,9 @@ async def main():
     dp.update.outer_middleware(BanMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
     dp.update.middleware(ProfticketSessionMiddleware(profticket))
+
+    show_update_service = ShowUpdateService(sessionmaker, profticket, bot)
+    asyncio.create_task(show_update_service.update_loop())
 
     logger.info(LEXICON_LOGS['BOT_STARTED'].format(settings.ADMIN_ID))
     await bot.delete_webhook(drop_pending_updates=True)
