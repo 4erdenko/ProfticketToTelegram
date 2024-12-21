@@ -42,3 +42,29 @@ class User(Base):
     @bot_blocked_date.setter
     def bot_blocked_date(self, value):
         self._bot_blocked_date = int(value.timestamp()) if value else None
+
+
+class Show(Base):
+    __tablename__ = 'shows'
+
+    id = Column(String, primary_key=True)  # id события
+    show_id = Column(Integer)  # id шоу/спектакля
+    theater = Column(String)  # название театра
+    scene = Column(String)  # название сцены
+    show_name = Column(String)  # название спектакля
+    date = Column(String)  # дата и время
+    duration = Column(String)  # продолжительность
+    age = Column(String)  # возрастное ограничение
+    seats = Column(Integer)  # количество мест
+    image = Column(String)  # ссылка на изображение
+    annotation = Column(String)  # описание
+    min_price = Column(Integer)  # минимальная цена
+    max_price = Column(Integer)  # максимальная цена
+    pushkin = Column(Boolean, default=False)  # поддержка Пушкинской карты
+    buy_link = Column(String)  # ссылка на покупку
+    actors = Column(String)  # JSON строка со списком актеров
+    month = Column(Integer)  # месяц
+    year = Column(Integer)  # год
+    updated_at = Column(
+        Integer
+    )  # время последнего обновления (Unix timestamp)
