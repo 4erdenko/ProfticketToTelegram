@@ -7,13 +7,14 @@ import pytz
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from telegram.db import User
 from telegram.db.models import Show
 from telegram.tg_utils import get_result_message
 
 logger = logging.getLogger(__name__)
 
-timezone = pytz.timezone('Europe/Moscow')
+timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
 
 
 async def get_user(session: AsyncSession, user_id: int) -> Type[User] | None:

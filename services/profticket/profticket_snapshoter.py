@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 from aiogram import Bot
+import pytz
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +14,7 @@ from telegram.db.models import Show
 from telegram.tg_utils import get_current_month_year, get_next_month_year
 
 logger = logging.getLogger(__name__)
-
+timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
 
 class ShowUpdateService:
     def __init__(self, session_maker, profticket: ProfticketsInfo, bot: Bot):
@@ -43,19 +44,19 @@ class ShowUpdateService:
         last_update = result.scalar()
         if not last_update:
             return False
-        current_time = int(datetime.now().timestamp())
+        current_time = int(datetime.now(timezone).timestamp())
         return (current_time - last_update) < settings.MAX_DATA_AGE
 
     async def _update_month_data(
         self, session: AsyncSession, month: int, year: int
     ) -> bool:
         try:
-            # Check the freshness of the data
-            if await self._check_data_freshness(session, month, year):
-                logger.info(
-                    f'Data for {month}/{year} is up-to-date, skipping update'
-                )
-                return True
+            # # Check the freshness of the data
+            # if await self._check_data_freshness(session, month, year):
+            #     logger.info(
+            #         f'Data for {month}/{year} is up-to-date, skipping update'
+            #     )
+            #     return True
 
             self.profticket.set_date(month, year)
             shows = await self.profticket.collect_full_info()
@@ -63,7 +64,7 @@ class ShowUpdateService:
                 logger.warning(f'No data available for {month}/{year}')
                 return False
 
-            current_time = int(datetime.now().timestamp())
+            current_time = int(datetime.now(timezone).timestamp())
 
             await session.execute(
                 delete(Show).where(Show.month == month, Show.year == year)

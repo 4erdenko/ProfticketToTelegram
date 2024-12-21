@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     ERROR_RETRY_INTERVAL: int = 60
     MAX_DATA_AGE: int = 3600
     MAX_CONSECUTIVE_ERRORS: int = 3
+    # Time settings
+    DEFAULT_TIMEZONE: str = 'Europe/Moscow'
 
     class Config:
         if os.environ.get('IN_DOCKER') != '1':
