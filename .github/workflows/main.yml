@@ -75,7 +75,7 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.HOST_USER }}
           key: ${{ secrets.SSH_KEY }}
-          passphrase: ${{ secrets.PASSPHRASE }}
+#          passphrase: ${{ secrets.PASSPHRASE }}
           source: "docker-compose.yml"
           target: "${{ secrets.FOLDER_PATH }}"
 
@@ -85,12 +85,12 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.HOST_USER }}
           key: ${{ secrets.SSH_KEY }}
-          passphrase: ${{ secrets.PASSPHRASE }}
+#          passphrase: ${{ secrets.PASSPHRASE }}
           script: |
             cd ${{ secrets.FOLDER_PATH }}
             cat <<EOF > .env
             ${{ secrets.ENV }}
             EOF
-            sudo docker compose up -d
-            sudo docker compose exec bot_service alembic upgrade head
-            sudo docker image prune -f
+#            sudo docker compose up -d
+#            sudo docker compose exec bot_service alembic upgrade head
+#            sudo docker image prune -f
