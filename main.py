@@ -60,7 +60,7 @@ async def main():
     )
     logger = logging.getLogger(__name__)
 
-    engine = create_async_engine(url=settings.DB_URL, echo=True)
+    engine = create_async_engine(url=settings.DB_URL, echo=False)
     logger.info(LEXICON_LOGS['ENGINE_CREATED'])
 
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
