@@ -56,6 +56,7 @@ class Show(Base):
     duration = Column(String)  # продолжительность
     age = Column(String)  # возрастное ограничение
     seats = Column(Integer)  # количество мест
+    previous_seats = Column(Integer) # прошлое количество мест
     image = Column(String)  # ссылка на изображение
     annotation = Column(String)  # описание
     min_price = Column(Integer)  # минимальная цена

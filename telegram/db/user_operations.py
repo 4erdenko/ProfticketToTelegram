@@ -61,7 +61,11 @@ async def get_shows_from_db(
 
         show_count += 1
         msg += get_result_message(
-            show.seats, show.show_name, show.date, show.buy_link
+            show.seats,
+            show.previous_seats,
+            show.show_name,
+            show.date,
+            show.buy_link
         )
         last_update = max(last_update, show.updated_at)
 

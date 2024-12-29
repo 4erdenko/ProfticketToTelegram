@@ -33,12 +33,13 @@ def get_next_month_year():
     return next_time.month, next_time.year
 
 
-def get_result_message(seats, show_name, date, buy_link):
+def get_result_message(seats, previous_seats, show_name, date, buy_link):
     """
     Function to create a message with information about a performance.
 
     Args:
         seats (int): Number of available seats.
+        previous_seats (int): Number of seats from previous update
         show_name (str): Name of the performance.
         date (str): Date of the performance.
         buy_link (str): Ticket purchase link.
@@ -49,10 +50,19 @@ def get_result_message(seats, show_name, date, buy_link):
     else:
         seats_text = f'Билетов: <a href="{buy_link}">{seats}</a>'
 
+    # Добавляем информацию об изменении количества билетов
+    seats_diff = ''
+    if previous_seats is not None and seats != previous_seats:
+        diff = seats - previous_seats
+        if diff < 0:
+            seats_diff = f' ({diff} 🔻)'
+        else:
+            seats_diff = f' (+{diff} 🔺)'
+
     return (
         f'📅<strong> {date}</strong>\n'
         f'💎 {show_name}\n'
-        f'🎫 {seats_text}\n'
+        f'🎫 {seats_text}{seats_diff}\n'
         '------------------------\n'
     )
 
