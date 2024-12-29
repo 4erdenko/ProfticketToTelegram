@@ -48,7 +48,7 @@ class ShowUpdateService:
         return (current_time - last_update) < settings.MAX_DATA_AGE
 
     async def _update_month_data(
-        self, session: AsyncSession, month: int, year: int
+            self, session: AsyncSession, month: int, year: int
     ) -> bool:
         try:
             # # Check the freshness of the data
@@ -66,6 +66,13 @@ class ShowUpdateService:
 
             current_time = int(datetime.now(timezone).timestamp())
 
+            current_shows = await session.execute(
+                select(Show).where(Show.month == month, Show.year == year)
+            )
+            current_shows_dict = {
+                show.id: show.seats for show in current_shows.scalars()
+            }
+
             await session.execute(
                 delete(Show).where(Show.month == month, Show.year == year)
             )
@@ -81,7 +88,7 @@ class ShowUpdateService:
                     duration=str(show_data['duration']),
                     age=str(show_data['age']),
                     seats=int(show_data['seats'] or 0),
-                    image=show_data['image'],
+                    previous_seats=current_shows_dict.get(event_id),                    image=show_data['image'],
                     annotation=show_data['annotation'],
                     min_price=int(show_data['min_price'] or 0),
                     max_price=int(show_data['max_price'] or 0),
