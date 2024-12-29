@@ -95,5 +95,5 @@ jobs:
             ${{ secrets.ENV }}
             EOF
             sudo docker compose up -d
-            sudo docker compose exec bot_service alembic upgrade head
+            sudo docker compose exec profticket_bot_service alembic upgrade head
             sudo docker image prune -f
