@@ -1,16 +1,17 @@
 import logging
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from telegram.db.user_operations import get_shows_from_db, search_count
+from telegram.db.user_operations import (get_available_months,
+                                         get_shows_from_db, search_count)
+from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.lexicon.lexicon_ru import (LEXICON_COMMANDS_RU, LEXICON_LOGS,
                                          LEXICON_RU)
-from telegram.tg_utils import (get_current_month_year, get_next_month_year,
-                               send_chunks_edit)
+from telegram.tg_utils import send_chunks_edit
 
 user_router = Router(name=__name__)
 logger = logging.getLogger(__name__)
@@ -32,43 +33,39 @@ async def cmd_help(message: Message):
     await message.answer(LEXICON_RU['HELP_CONTACT'])
 
 
-@user_router.message(F.text == 'Этот месяц')
-async def cmd_this_month(message: Message, session: AsyncSession):
+@user_router.message(MonthFilter(personal=False))
+async def cmd_show_month(message: Message, session: AsyncSession):
     await search_count(session, message.from_user.id)
-    month, year = get_current_month_year()
-    try:
-        msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        shows_info = await get_shows_from_db(session, month, year)
-        await send_chunks_edit(message.chat.id, msg, shows_info)
+    months = await get_available_months(session)
+    selected_month = None
 
-        logger.info(
-            f'{message.from_user.full_name} '
-            f'(@{message.from_user.username}) '
-            f'ID({message.from_user.id}) got shows for {month} month'
-        )
-    except Exception as e:
-        await message.answer(
-            'Произошла ошибка, попробуйте ещё раз через минутку.'
-        )
-        logger.error(e)
+    for month in months:
+        if month[1] == message.text:
+            selected_month = month
+            break
 
+    if selected_month:
+        month_number, _, year = selected_month
+        try:
+            msg = await message.answer(LEXICON_RU['WAIT_MSG'])
+            shows_info = await get_shows_from_db(session, month_number, year)
+            await send_chunks_edit(message.chat.id, msg, shows_info)
 
-@user_router.message(F.text == 'Следующий месяц')
-async def cmd_next_month(message: Message, session: AsyncSession):
-    await search_count(session, message.from_user.id)
-    month, year = get_next_month_year()
-    try:
-        msg = await message.answer(LEXICON_RU['WAIT_MSG'])
-        shows_info = await get_shows_from_db(session, month, year)
-        await send_chunks_edit(message.chat.id, msg, shows_info)
-
-        logger.info(
-            f'{message.from_user.full_name} '
-            f'(@{message.from_user.username}) '
-            f'ID({message.from_user.id}) got shows for {month} month'
-        )
-    except Exception as e:
-        await message.answer(
-            'Произошла ошибка, попробуйте ещё раз через минутку.'
-        )
-        logger.error(e)
+            logger.info(
+                LEXICON_LOGS['USER_GOT_SHOWS'].format(
+                    message.from_user.full_name,
+                    message.from_user.username,
+                    message.from_user.id,
+                    month_number,
+                )
+            )
+        except Exception as e:
+            await message.answer(LEXICON_RU['ERROR_MSG'])
+            logger.error(
+                LEXICON_LOGS['USER_ERROR'].format(
+                    message.from_user.full_name,
+                    message.from_user.username,
+                    message.from_user.id,
+                    str(e),
+                )
+            )

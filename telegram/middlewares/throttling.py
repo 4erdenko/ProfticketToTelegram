@@ -46,7 +46,6 @@ class ThrottlingMiddleware(BaseMiddleware):
             return None
 
         if event_user.id not in self._cache:
-
             self._cache[event_user.id] = ThrottlingData()
 
         throttling_data = self._cache[event_user.id]

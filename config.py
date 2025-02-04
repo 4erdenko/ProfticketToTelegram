@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     MAX_RATE_SEC_IN_TTL: int = 10
     # # DB
     DB_URL: str
+    DB_ECHO: bool = False
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
     POSTGRES_DB: str
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str

@@ -7,6 +7,7 @@ from aiogram.types import Message
 from dateutil.relativedelta import relativedelta
 
 from config import settings
+from telegram.lexicon.lexicon_ru import LEXICON_MONTHS_RU
 
 
 def get_current_month_year():
@@ -33,6 +34,29 @@ def get_next_month_year():
     return next_time.month, next_time.year
 
 
+def get_three_months():
+    """
+    Get information about current month and two
+    following months in Moscow timezone.
+
+    Returns:
+        tuple: A tuple containing three tuples,
+        each with (month_number, month_name).
+    """
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    current_time = datetime.now(moscow_tz)
+
+    months = []
+    for i in range(3):
+        month_date = current_time + relativedelta(months=i)
+        month_number = month_date.month
+        month_name = month_date.strftime('%B')  # Full month name in English
+        month_name_ru = LEXICON_MONTHS_RU[month_name]
+        months.append((month_number, month_name_ru, month_date.year))
+
+    return tuple(months)
+
+
 def get_result_message(seats, previous_seats, show_name, date, buy_link):
     """
     Function to create a message with information about a performance.
@@ -50,7 +74,6 @@ def get_result_message(seats, previous_seats, show_name, date, buy_link):
     else:
         seats_text = f'Билетов: <a href="{buy_link}">{seats}</a>'
 
-    # Добавляем информацию об изменении количества билетов
     seats_diff = ''
     if previous_seats is not None and seats != previous_seats:
         diff = seats - previous_seats
@@ -68,23 +91,21 @@ def get_result_message(seats, previous_seats, show_name, date, buy_link):
 
 
 def split_message_by_separator(
-        message,
-        separator='\n------------------------\n',
-        max_length=settings.MAX_MSG_LEN,
-):
+    message: str,
+    separator: str = '\n------------------------\n',
+    max_length: int = settings.MAX_MSG_LEN,
+) -> list[str]:
     """
-
     Splits a message into chunks based on the provided separator.
     Ensures that each chunk is within the maximum length.
 
     Args:
-        message (str):The message to split.
-        separator (str, optional):The separator to split the message.
-        max_length (int, optional):The maximum length of each chunk.
-            Default is 4096.
+        message: The message to split
+        separator: The separator to split the message
+        max_length: The maximum length of each chunk
 
     Returns:
-        list: A list of message chunks.
+        list: A list of message chunks
     """
     chunks = []
     current_chunk = ''
@@ -102,20 +123,18 @@ def split_message_by_separator(
     return chunks
 
 
-async def send_chunks_edit(chat_id, message, text, **kwargs):
+async def send_chunks_edit(
+    chat_id: int, message: Message, text: str, **kwargs
+) -> None:
     """
     Sends a message in chunks. The first chunk is sent using msg.edit_text,
     and the subsequent chunks are sent using message.answer.
 
     Args:
-        chat_id (int): The ID of the chat where the message will be sent.
-        message (aiogram.types.Message): The message object.
-        text (str): The message text to be sent.
-        **kwargs: Additional arguments to pass to the message
-            sending functions.
-
-    Returns:
-        None
+        chat_id: The ID of the chat where the message will be sent
+        message: The message object
+        text: The message text to be sent
+        **kwargs: Additional arguments to pass to the message sending functions
     """
     chunks = split_message_by_separator(text)
 
@@ -126,7 +145,16 @@ async def send_chunks_edit(chat_id, message, text, **kwargs):
             await asyncio.sleep(1)
 
 
-async def check_text(message: Message):
+async def check_text(message: Message) -> str | None:
+    """
+    Check if message text is valid name format.
+
+    Args:
+        message: Message to check
+
+    Returns:
+        str: Cleaned text if valid, None otherwise
+    """
     text = message.text
     if isinstance(text, str):
         text = text.lower().strip()
