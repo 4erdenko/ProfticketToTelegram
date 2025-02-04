@@ -14,7 +14,7 @@ from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.keyboards.personal_keyboard import personal_keyboard
 from telegram.lexicon.lexicon_ru import (LEXICON_BUTTONS_RU, LEXICON_LOGS,
-                                         LEXICON_RU)
+                                         LEXICON_MONTHS_RU, LEXICON_RU)
 from telegram.tg_utils import check_text, send_chunks_edit
 
 personal_user_router = Router(name=__name__)
@@ -138,3 +138,17 @@ async def cmd_show_month_personal(message: Message, session: AsyncSession):
                     str(e),
                 )
             )
+
+@personal_user_router.message(F.text.in_({'Этот', 'Следующий', 'Назад'}))
+async def handle_old_personal_buttons(message: Message, session: AsyncSession):
+    user = await get_user(session, message.from_user.id)
+    if user and user.spectacle_full_name and message.text != 'Назад':
+        await message.answer(
+            LEXICON_RU['CHOOSE_MONTH'],
+            reply_markup=await personal_keyboard(session),
+        )
+    else:
+        await message.answer(
+            LEXICON_RU['MAIN_MENU'],
+            reply_markup=await main_keyboard(message, session),
+        )
