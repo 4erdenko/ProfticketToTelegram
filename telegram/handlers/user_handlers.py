@@ -10,7 +10,7 @@ from telegram.db.user_operations import (get_available_months,
 from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.lexicon.lexicon_ru import (LEXICON_COMMANDS_RU, LEXICON_LOGS,
-                                         LEXICON_MONTHS_RU, LEXICON_RU)
+                                         LEXICON_RU)
 from telegram.tg_utils import send_chunks_edit
 
 user_router = Router(name=__name__)
@@ -71,7 +71,9 @@ async def cmd_show_month(message: Message, session: AsyncSession):
             )
 
 
-@user_router.message(F.text.in_({'Этот месяц', 'Следующий месяц', 'Выбрать актёра/актрису'}))
+@user_router.message(
+    F.text.in_({'Этот месяц', 'Следующий месяц', 'Выбрать актёра/актрису'})
+)
 async def handle_old_buttons(message: Message, session: AsyncSession):
     await message.answer(
         LEXICON_RU['MAIN_MENU'],
