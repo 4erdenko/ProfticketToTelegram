@@ -52,11 +52,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Build Docker image
-        run: docker build -t profticket_bot_image .
+    - name: Build Docker image
+      run: docker build -t profticket_bot_image .
 
-      - name: Run Docker container
-        run: docker run -d -e BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} --name prof_bot profticket_bot_image python3 main.py
+    - name: Create env file
+      run: |
+        cat <<'EOF' > .env
+        ${{ secrets.ENV }}
+        EOF
+
+    - name: Run Docker container
+      run: docker run -d --env-file .env --name prof_bot profticket_bot_image
 
       - name: Check container logs
         run: |
