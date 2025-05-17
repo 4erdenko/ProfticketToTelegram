@@ -14,6 +14,7 @@ from telegram.db import User
 from telegram.db.models import Show
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS, LEXICON_MONTHS_RU
 from telegram.tg_utils import parse_show_date
+from telegram.utils.prediction import estimate_sold_out_date
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,12 @@ def get_three_months() -> tuple:
 
 
 def get_result_message(
-    seats: int, previous_seats: int, show_name: str, date: str, buy_link: str
+    seats: int,
+    previous_seats: int | None,
+    show_name: str,
+    date: str,
+    buy_link: str,
+    sold_out_date: datetime | None = None,
 ) -> str:
     """
     Function to create a message with information about a performance.
@@ -96,10 +102,15 @@ def get_result_message(
         else:
             seats_diff = f' (+{diff} 🔺)'
 
+    sold_out_text = (
+        f'⏳ Закончатся: {sold_out_date:%d.%m.%Y}\n' if sold_out_date else ''
+    )
+
     return (
         f'📅<strong> {date}</strong>\n'
         f'💎 {show_name}\n'
         f'🎫 {seats_text}{seats_diff}\n'
+        f'{sold_out_text}'
         '------------------------\n'
     )
 
@@ -270,12 +281,14 @@ async def get_shows_from_db(
             continue
 
         show_count += 1
+        predicted = estimate_sold_out_date(str(show.show_id))
         msg += get_result_message(
             show.seats,
             show.previous_seats,
             show.show_name,
             show.date,
             show.buy_link,
+            predicted,
         )
         last_update = max(last_update, show.updated_at)
 

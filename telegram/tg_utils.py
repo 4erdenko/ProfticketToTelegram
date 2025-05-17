@@ -90,7 +90,14 @@ def parse_show_date(date_str: str) -> datetime:
         return datetime.min
 
 
-def get_result_message(seats, previous_seats, show_name, date, buy_link):
+def get_result_message(
+    seats,
+    previous_seats=None,
+    show_name=None,
+    date=None,
+    buy_link=None,
+    sold_out_date=None,
+):
     """
     Function to create a message with information about a performance.
 
@@ -115,10 +122,15 @@ def get_result_message(seats, previous_seats, show_name, date, buy_link):
         else:
             seats_diff = f' (+{diff} 🔺)'
 
+    sold_out_text = (
+        f'⏳ Закончатся: {sold_out_date:%d.%m.%Y}\n' if sold_out_date else ''
+    )
+
     return (
         f'📅<strong> {date}</strong>\n'
         f'💎 {show_name}\n'
         f'🎫 {seats_text}{seats_diff}\n'
+        f'{sold_out_text}'
         '------------------------\n'
     )
 
