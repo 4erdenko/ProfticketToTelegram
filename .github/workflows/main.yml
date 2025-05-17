@@ -23,9 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install flake8==6.0.0 flake8-isort==6.0.0
           pip install -r ./requirements.txt
+          pip install pytest
       - name: Test with flake8
         run: |
           python -m flake8 .
+      - name: Run tests
+        run: |
+          pytest -q
   build-test:
     runs-on: ubuntu-latest
     steps:
