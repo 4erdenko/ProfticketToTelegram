@@ -71,6 +71,17 @@ class Show(Base):
     )  # время последнего обновления (Unix timestamp)
 
 
+
+class PriceHistory(Base):
+    __tablename__ = 'price_history'
+
+    id = Column(Integer, primary_key=True)
+    show_id = Column(String)
+    timestamp = Column(Integer, default=current_timestamp)
+    min_price = Column(Integer)
+    max_price = Column(Integer)
+
+
 class ShowSeatHistory(Base):
     __tablename__ = 'show_seat_history'
 
@@ -78,3 +89,4 @@ class ShowSeatHistory(Base):
     show_id = Column(String, ForeignKey('shows.id'), nullable=False)
     timestamp = Column(Integer)
     seats = Column(Integer)
+

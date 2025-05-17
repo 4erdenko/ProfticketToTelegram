@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from services.profticket.profticket_api import ProfticketsInfo
-from telegram.db.models import Show, ShowSeatHistory
+
+from telegram.db.models import Show, ShowSeatHistory, PriceHistory
+
 
 logger = logging.getLogger(__name__)
 timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
@@ -65,9 +67,7 @@ class ShowUpdateService:
             current_shows = await session.execute(
                 select(Show).where(Show.month == month, Show.year == year)
             )
-            current_shows_dict = {
-                show.id: show.seats for show in current_shows.scalars()
-            }
+            current_shows_dict = {show.id: show for show in current_shows.scalars()}
 
             # Подготавливаем данные для обновления
             for event_id, show_data in shows.items():
@@ -81,7 +81,11 @@ class ShowUpdateService:
                     'duration': str(show_data['duration']),
                     'age': str(show_data['age']),
                     'seats': int(show_data['seats'] or 0),
-                    'previous_seats': current_shows_dict.get(event_id),
+                    'previous_seats': (
+                        current_shows_dict.get(event_id).seats
+                        if current_shows_dict.get(event_id)
+                        else None
+                    ),
                     'image': show_data['image'],
                     'annotation': show_data['annotation'],
                     'min_price': int(show_data['min_price'] or 0),
@@ -96,6 +100,23 @@ class ShowUpdateService:
                     'year': year,
                     'updated_at': current_time,
                 }
+
+                prev = current_shows_dict.get(event_id)
+                if (
+                    not prev
+                    or prev.min_price != show_values['min_price']
+                    or prev.max_price != show_values['max_price']
+                ):
+                    await session.execute(
+                        insert(PriceHistory).values(
+                            {
+                                'show_id': event_id,
+                                'timestamp': current_time,
+                                'min_price': show_values['min_price'],
+                                'max_price': show_values['max_price'],
+                            }
+                        )
+                    )
 
                 # Используем insert().on_conflict_do_update()
                 stmt = insert(Show).values(show_values)
