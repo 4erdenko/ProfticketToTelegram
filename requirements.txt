@@ -1,4 +1,4 @@
-aiogram==3.3.0
+aiogram==3.6.0
 httpx==0.26.0
 pymorphy2==0.8
 pytz==2023.3.post1
@@ -8,7 +8,8 @@ alembic~=1.13.1
 coloredlogs~=15.0.1
 cachetools~=5.3.2
 python-dateutil~=2.8.2
-pydantic-settings~=2.1.0
+pydantic-settings~=2.9.1
 asyncpg~=0.29.0
 tenacity~=8.2.3
 fake-useragent~=1.5.1
+pytest~=8.3.5
