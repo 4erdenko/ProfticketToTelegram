@@ -1,4 +1,4 @@
-aiogram==3.3.0
+aiogram==3.6.0
 httpx==0.26.0
 pymorphy2==0.8
 pytz==2023.3.post1
