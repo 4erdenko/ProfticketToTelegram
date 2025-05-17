@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
 
 from config import settings
 from services.profticket.profticket_api import ProfticketsInfo
@@ -24,7 +25,8 @@ async def main() -> None:
     """Main application entry point."""
     setup_logging()
 
-    bot = Bot(token=get_token(), parse_mode='HTML')
+    bot = Bot(token=get_token(),
+              default=DefaultBotProperties(parse_mode='HTML'))
     dp = await setup_dispatcher()
 
     session_pool, context_data = await setup_database()
