@@ -5,6 +5,7 @@ from typing import Any, Dict, Type
 
 import pytz
 from dateutil.relativedelta import relativedelta
+from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
                                     create_async_engine)
@@ -290,6 +291,67 @@ async def get_shows_from_db(
         f'Данные актуальны на: {formatted_time}'
     )
     return f'{msg}{total}'
+
+
+async def get_top_shows_and_actors(
+    session: AsyncSession,
+    months: int = 1,
+    limit: int = 5,
+) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
+    """Calculate top shows and actors for the last ``months``.
+
+    Popularity of shows is evaluated by the total decrease in available
+    seats. Popularity of actors takes into account seat changes in their
+    shows and users' ``search_count``.
+
+    Args:
+        session: Database session.
+        months: Period length.
+        limit: Maximum number of items to return.
+
+    Returns:
+        Two lists ``(top_shows, top_actors)`` sorted by score.
+    """
+    start_time = datetime.utcnow() - timedelta(days=30 * months)
+    start_ts = int(start_time.timestamp())
+
+    query = select(Show).where(Show.updated_at >= start_ts)
+    result = await session.execute(query)
+    shows = result.scalars().all()
+
+    show_score: Dict[str, int] = {}
+    actor_score: Dict[str, int] = {}
+
+    for show in shows:
+        diff = 0
+        if show.previous_seats is not None and show.seats is not None:
+            diff = max(show.previous_seats - show.seats, 0)
+
+        show_score[show.show_name] = show_score.get(show.show_name, 0) + diff
+
+        actors = []
+        try:
+            actors = json.loads(show.actors) if show.actors else []
+        except Exception:
+            actors = []
+
+        for actor in actors:
+            if not actor:
+                continue
+            key = actor.lower().strip()
+            actor_score[key] = actor_score.get(key, 0) + diff
+
+    # add user search statistics
+    users_res = await session.execute(select(User.spectacle_full_name, User.search_count))
+    for name, cnt in users_res.all():
+        if not name or not cnt:
+            continue
+        key = name.lower().strip()
+        actor_score[key] = actor_score.get(key, 0) + cnt
+
+    top_shows = sorted(show_score.items(), key=lambda x: x[1], reverse=True)[:limit]
+    top_actors = sorted(actor_score.items(), key=lambda x: x[1], reverse=True)[:limit]
+    return top_shows, top_actors
 
 
 async def setup_database() -> tuple[async_sessionmaker, Dict[str, Any]]:
