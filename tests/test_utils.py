@@ -1,7 +1,7 @@
 import unittest
 
-from services.profticket.profticket_api import ProfticketsInfo
 from services.profticket import utils as pt_utils
+from services.profticket.profticket_api import ProfticketsInfo
 from telegram import tg_utils
 
 
@@ -13,7 +13,8 @@ class UtilsTestCase(unittest.TestCase):
         api = ProfticketsInfo('42')
         link = api._generate_buy_link('e1', 's1')
         exp = (
-            f'{api.CUSTOMER_BUY_URL}42/shows/s1?eventsIds%5B%5D=e1&language=ru-RU'
+            f'{api.CUSTOMER_BUY_URL}42/shows/s1?eventsIds%5B%5D='
+            f'e1&language=ru-RU'
         )
         self.assertEqual(link, exp)
 
@@ -27,8 +28,9 @@ class UtilsTestCase(unittest.TestCase):
         api.set_date(5, 2024)
         url = api._create_url(2)
         exp = (
-            "https://widget.profticket.ru/api/event/list/?company_id=42"
-            "&type=events&page=2&period_id=4&hall_id=&date=2024.5&name=&language=ru-RU"
+            'https://widget.profticket.ru/api/event/list/?company_id=42'
+            '&type=events&page=2&period_id=4&hall_id=&date=2024.'
+            '5&name=&language=ru-RU'
         )
         self.assertEqual(url, exp)
 
@@ -39,13 +41,15 @@ class UtilsTestCase(unittest.TestCase):
         self.assertEqual(headers['User-Agent'], 'UA')
 
     def test_split_message_by_separator(self):
-        text = (
-            'a\n------------------------\nb\n'
-            '------------------------\nc'
-        )
+        text = 'a\n------------------------\nb\n' '------------------------\nc'
         parts = tg_utils.split_message_by_separator(text, max_length=40)
         self.assertEqual(len(parts), 3)
         self.assertTrue(parts[0].endswith('------------------------'))
+
+    def test_parse_show_date(self):
+        d1 = tg_utils.parse_show_date('18 мая 2025, вс, 16:00')
+        d2 = tg_utils.parse_show_date('20 мая 2025, вт, 20:00')
+        self.assertLess(d1, d2)
 
 
 class CheckTextTestCase(unittest.IsolatedAsyncioTestCase):

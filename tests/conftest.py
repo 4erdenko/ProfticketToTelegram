@@ -1,6 +1,8 @@
 import sys
 import types
+
 import pytest
+
 
 @pytest.fixture(autouse=True)
 def stub_modules(monkeypatch):
@@ -8,6 +10,7 @@ def stub_modules(monkeypatch):
 
     # config settings stub
     config = types.ModuleType('config')
+
     class Settings:
         COM_ID = '1'
         MAX_MSG_LEN = 100
@@ -16,33 +19,43 @@ def stub_modules(monkeypatch):
         PROXY_URL = ''
         STOP_AFTER_ATTEMPT = 3
         DEFAULT_TIMEZONE = 'Europe/Moscow'
+
     config.settings = Settings()
     modules['config'] = config
 
     # required external modules
     pymorphy2 = types.ModuleType('pymorphy2')
+
     class MorphAnalyzer:
         def parse(self, word):
             class Res:
                 def __init__(self, w):
                     self.w = w
+
                 def make_agree_with_number(self, num):
                     class Word:
                         def __init__(self, txt):
                             self.word = txt
+
                     return Word(f'{self.w}_{num}')
+
             return [Res(word)]
+
     pymorphy2.MorphAnalyzer = MorphAnalyzer
     modules['pymorphy2'] = pymorphy2
 
     httpx = types.ModuleType('httpx')
+
     class AsyncClient:
         def __init__(self, *a, **kw):
             pass
+
     httpx.AsyncClient = AsyncClient
+
     class Limits:
         def __init__(self, *a, **kw):
             pass
+
     httpx.Limits = Limits
     httpx.TimeoutException = Exception
     httpx.ProxyError = Exception
@@ -50,10 +63,12 @@ def stub_modules(monkeypatch):
     modules['httpx'] = httpx
 
     fake_useragent = types.ModuleType('fake_useragent')
+
     class UserAgent:
         @property
         def random(self):
             return 'agent'
+
     fake_useragent.UserAgent = UserAgent
     modules['fake_useragent'] = fake_useragent
 
@@ -70,18 +85,22 @@ def stub_modules(monkeypatch):
 
     dateutil = types.ModuleType('dateutil')
     rdelta = types.ModuleType('dateutil.relativedelta')
+
     class relativedelta:
         def __init__(self, *a, **k):
             pass
+
     rdelta.relativedelta = relativedelta
     modules['dateutil.relativedelta'] = rdelta
     modules['dateutil'] = dateutil
 
     aiogram = types.ModuleType('aiogram')
     aiogram_types = types.ModuleType('aiogram.types')
+
     class Message:
         def __init__(self, text=''):
             self.text = text
+
     aiogram_types.Message = Message
     modules['aiogram'] = aiogram
     modules['aiogram.types'] = aiogram_types

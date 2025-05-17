@@ -80,3 +80,6 @@ if __name__ == '__main__':
 ```
 
 This will create a file named `logfile.log` in the same directory as your `main.py` file, and it will append log messages to the file. You can customize the filename
+## Recent Changes
+- Shows are sorted by date when fetching from DB.
+- Added `parse_show_date` utility to handle Russian dates.
