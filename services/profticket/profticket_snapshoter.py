@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from services.profticket.profticket_api import ProfticketsInfo
-from telegram.db.models import Show, PriceHistory
+
+from telegram.db.models import Show, ShowSeatHistory, PriceHistory
+
 
 logger = logging.getLogger(__name__)
 timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
@@ -122,6 +124,14 @@ class ShowUpdateService:
                     index_elements=['id'], set_=show_values
                 )
                 await session.execute(stmt)
+
+                # record seats history
+                hist_stmt = insert(ShowSeatHistory).values(
+                    show_id=event_id,
+                    timestamp=current_time,
+                    seats=show_values['seats'],
+                )
+                await session.execute(hist_stmt)
 
             # Удаляем устаревшие записи
             all_event_ids = list(shows.keys())
