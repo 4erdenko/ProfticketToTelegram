@@ -52,28 +52,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-    - name: Build Docker image
-      run: docker build -t profticket_bot_image .
+      - name: Build Docker image
+        run: docker build -t profticket_bot_image .
 
 
-    - name: Create env file
-      run: |
-        cat <<'EOF' > .env
-        ${{ secrets.ENV }}
-        EOF
+      - name: Create env file
+        run: |
+          cat <<'EOF' > .env
+          ${{ secrets.ENV }}
+          EOF
 
-    - name: Run Docker container
-      run: docker run -d --env-file .env --name prof_bot profticket_bot_image
+      - name: Run Docker container
+        run: docker run -d --env-file .env --name prof_bot profticket_bot_image
 
 
-    - name: Check container logs
-      run: |
-        sleep 5
-        docker logs prof_bot
-        if [ "$(docker inspect -f '{{.State.Running}}' prof_bot)" != "true" ]; then
-          echo "Container failed to start" >&2
-          exit 1
-        fi
+      - name: Check container logs
+        run: |
+          sleep 5
+          docker logs prof_bot
+          if [ "$(docker inspect -f '{{.State.Running}}' prof_bot)" != "true" ]; then
+            echo "Container failed to start" >&2
+            exit 1
+          fi
 
   build-push:
     runs-on: ubuntu-latest
