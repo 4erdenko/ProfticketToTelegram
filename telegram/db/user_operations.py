@@ -13,6 +13,7 @@ from config import settings
 from telegram.db import User
 from telegram.db.models import Show
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS, LEXICON_MONTHS_RU
+from telegram.tg_utils import parse_show_date
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,11 @@ async def set_spectacle_fio(
 
 
 async def get_shows_from_db(
-    session: AsyncSession, month: int, year: int, actor_filter=None
+    session: AsyncSession,
+    month: int,
+    year: int,
+    actor_filter=None,
+    descending: bool = False,
 ) -> str:
     """
     Get shows from database for specified month and year.
@@ -236,6 +241,7 @@ async def get_shows_from_db(
         month: Month number
         year: Year
         actor_filter: Optional actor name to filter shows
+        descending: Sort in descending order if True
 
     Returns:
         str: Formatted message with shows information
@@ -243,6 +249,11 @@ async def get_shows_from_db(
     query = select(Show).where(Show.month == month, Show.year == year)
     result = await session.execute(query)
     shows = result.scalars().all()
+
+    shows.sort(
+        key=lambda s: parse_show_date(s.date),
+        reverse=descending,
+    )
 
     if not shows:
         return 'Нет спектаклей в этом месяце'

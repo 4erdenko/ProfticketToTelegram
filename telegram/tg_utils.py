@@ -9,6 +9,21 @@ from dateutil.relativedelta import relativedelta
 from config import settings
 from telegram.lexicon.lexicon_ru import LEXICON_MONTHS_RU
 
+MONTHS_GENITIVE_RU = {
+    'января': 1,
+    'февраля': 2,
+    'марта': 3,
+    'апреля': 4,
+    'мая': 5,
+    'июня': 6,
+    'июля': 7,
+    'августа': 8,
+    'сентября': 9,
+    'октября': 10,
+    'ноября': 11,
+    'декабря': 12,
+}
+
 
 def get_current_month_year():
     """
@@ -55,6 +70,24 @@ def get_three_months():
         months.append((month_number, month_name_ru, month_date.year))
 
     return tuple(months)
+
+
+def parse_show_date(date_str: str) -> datetime:
+    """Parse a Russian formatted show date."""
+    try:
+        date_part, _, time_part = date_str.partition(',')
+        day_str, month_ru, year_str = date_part.strip().split()
+        hour_min = time_part.rsplit(',', 1)[-1].strip()
+        month = MONTHS_GENITIVE_RU.get(month_ru.lower())
+        if not month:
+            raise ValueError('Unknown month name')
+        fmt = '%d.%m.%Y %H:%M'
+        return datetime.strptime(
+            f'{day_str}.{month}.{year_str} {hour_min}',
+            fmt,
+        )
+    except Exception:
+        return datetime.min
 
 
 def get_result_message(seats, previous_seats, show_name, date, buy_link):

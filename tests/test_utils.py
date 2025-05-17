@@ -47,6 +47,11 @@ class UtilsTestCase(unittest.TestCase):
         self.assertEqual(len(parts), 3)
         self.assertTrue(parts[0].endswith('------------------------'))
 
+    def test_parse_show_date(self):
+        d1 = tg_utils.parse_show_date('18 мая 2025, вс, 16:00')
+        d2 = tg_utils.parse_show_date('20 мая 2025, вт, 20:00')
+        self.assertLess(d1, d2)
+
 
 class CheckTextTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_check_text(self):
