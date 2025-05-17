@@ -58,6 +58,8 @@ jobs:
           cat <<'EOF' > .env
           ${{ secrets.ENV }}
           EOF
+          sed -i '/^IN_DOCKER=/d' .env
+          echo 'IN_DOCKER=false' >> .env
 
       - name: Start stack with docker compose
         env:
