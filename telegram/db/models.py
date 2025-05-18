@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, Column, Integer, String, func, ForeignKey
+from sqlalchemy import (BigInteger, Boolean, Column, ForeignKey, Integer,
+                        String, func)
 
 from telegram.db import Base
 

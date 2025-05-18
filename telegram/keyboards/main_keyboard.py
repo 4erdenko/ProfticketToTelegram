@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from telegram.db.user_operations import get_available_months, get_user
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU
-from telegram.keyboards.analytics_keyboard import analytics_main_menu_keyboard
 
 
 async def main_keyboard(message: Message, session: AsyncSession):
@@ -15,24 +14,23 @@ async def main_keyboard(message: Message, session: AsyncSession):
     if months:
         month_buttons = [KeyboardButton(text=month[1]) for month in months]
         kb.append(month_buttons)
-    
+
     if user.spectacle_full_name:
         spectacle_full_name = user.spectacle_full_name.title()
         button_text = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
         kb.append([KeyboardButton(text=button_text)])
     else:
         kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/set_fighter'])])
-    
+
     # Add Analytics button
     kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])])
 
-    # Fallback for no months and no spectacle_full_name (only set_fighter and analytics)
     if not months and not user.spectacle_full_name:
         kb = [
             [KeyboardButton(text=LEXICON_BUTTONS_RU['/set_fighter'])],
-            [KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])], 
+            [KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])],
         ]
-    elif not months and user.spectacle_full_name: # no months but has spectacle_full_name
+    elif not months and user.spectacle_full_name:
         spectacle_full_name = user.spectacle_full_name.title()
         button_text = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
         kb = [
@@ -41,7 +39,5 @@ async def main_keyboard(message: Message, session: AsyncSession):
         ]
 
     return ReplyKeyboardMarkup(
-        keyboard=kb,
-        resize_keyboard=True,
-        is_persistent=True
+        keyboard=kb, resize_keyboard=True, is_persistent=True
     )
