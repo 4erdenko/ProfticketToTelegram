@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 
 from config import settings
 from telegram.handlers import (maintenance_handler, personal_handlers,
-                               throttling_handler, user_handlers)
+                               throttling_handler, user_handlers,
+                               analytics_handlers)
 from telegram.keyboards.native_menu import set_native_menu
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS
 
@@ -54,6 +55,7 @@ async def setup_dispatcher() -> Dispatcher:
     dp.include_router(throttling_handler.throttling_router)
     dp.include_router(user_handlers.user_router)
     dp.include_router(personal_handlers.personal_user_router)
+    dp.include_router(analytics_handlers.analytics_router)
     return dp
 
 

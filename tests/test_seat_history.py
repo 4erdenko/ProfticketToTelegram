@@ -1,0 +1,231 @@
+import sys
+import types
+import unittest
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+
+if 'aiogram' not in sys.modules:
+    sys.modules['aiogram'] = types.ModuleType('aiogram')
+if not hasattr(sys.modules['aiogram'], 'Bot'):
+    class Bot:
+        async def send_message(self, *a, **kw):
+            pass
+
+    sys.modules['aiogram'].Bot = Bot
+
+from telegram.db import Base
+from telegram.db.models import ShowSeatHistory, Show
+from services.profticket import analytics
+from services.profticket.profticket_snapshoter import ShowUpdateService
+
+
+class DummyProfticket:
+    def __init__(self, data):
+        self.data = data
+
+    def set_date(self, month, year):
+        pass
+
+    async def collect_full_info(self):
+        return self.data
+
+
+class DummyBot:
+    async def send_message(self, *a, **kw):
+        pass
+
+
+class FakeAsyncSession:
+    def __init__(self, sync_session):
+        self._session = sync_session
+
+    async def execute(self, *a, **kw):
+        return self._session.execute(*a, **kw)
+
+    async def commit(self):
+        self._session.commit()
+
+    async def rollback(self):
+        self._session.rollback()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self._session.close()
+
+
+class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(self.engine, expire_on_commit=False)
+
+    async def asyncTearDown(self):
+        self.engine.dispose()
+
+    async def test_history_created(self):
+        data = {
+            "e1": {
+                "show_id": "1",
+                "theater": "t",
+                "scene": "s",
+                "show_name": "n",
+                "date": "d",
+                "duration": "1h",
+                "age": "0+",
+                "seats": 5,
+                "image": "i",
+                "annotation": "a",
+                "min_price": 0,
+                "max_price": 0,
+                "pushkin": False,
+                "buy_link": "b",
+                "actors": ["ac"],
+            }
+        }
+        service = ShowUpdateService(self.Session, DummyProfticket(data), DummyBot())
+        sync_session = self.Session()
+        async with FakeAsyncSession(sync_session) as session:
+            await service._update_month_data(session, 1, 2024)
+            res = await session.execute(select(ShowSeatHistory))
+            history = res.scalars().all()
+            self.assertEqual(len(history), 1)
+            row = history[0]
+            self.assertEqual(row.show_id, "e1")
+            self.assertEqual(row.seats, 5)
+
+    def test_predict_sold_out(self):
+        history_s1 = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
+        ]
+        pred = analytics.predict_sold_out(history_s1)
+        self.assertEqual(pred, 50)
+
+        history_sold_out = [
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=5),
+            ShowSeatHistory(show_id='s2', timestamp=20, seats=0),
+        ]
+        pred_sold_out = analytics.predict_sold_out(history_sold_out)
+        self.assertIsNone(pred_sold_out) # Already sold out
+
+    def test_top_shows_by_sales(self):
+        shows_data = [
+            Show(id='s1', show_name='Show Alpha', month=1, year=2024, actors='[]'),
+            Show(id='s1b', show_name='Show Alpha', month=1, year=2024, actors='[]'),
+            Show(id='s2', show_name='Show Beta', month=1, year=2024, actors='[]'),
+            Show(id='s3', show_name='Show Gamma', month=2, year=2024, actors='[]'),
+        ]
+        histories_data = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10), 
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),  # s1 sold 5
+            ShowSeatHistory(show_id='s1b', timestamp=10, seats=8),
+            ShowSeatHistory(show_id='s1b', timestamp=30, seats=6), # s1b sold 2
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=20), 
+            ShowSeatHistory(show_id='s2', timestamp=30, seats=17), # s2 sold 3
+            ShowSeatHistory(show_id='s3', timestamp=10, seats=100),
+            ShowSeatHistory(show_id='s3', timestamp=30, seats=90), # s3 sold 10 (month 2)
+        ]
+        
+        top_all_time = analytics.top_shows_by_sales(shows_data, histories_data, n=3)
+        self.assertEqual(len(top_all_time), 3)
+        self.assertEqual(top_all_time[0][0], 'Show Gamma')
+        self.assertEqual(top_all_time[0][1], 10)
+        self.assertEqual(top_all_time[1][0], 'Show Alpha')
+        self.assertEqual(top_all_time[1][1], 7)
+        self.assertEqual(top_all_time[2][0], 'Show Beta')
+        self.assertEqual(top_all_time[2][1], 3)
+        self.assertEqual(len([x for x in top_all_time if x[0]=='Show Alpha']), 1)
+
+        top_month1 = analytics.top_shows_by_sales(shows_data, histories_data, month=1, year=2024, n=2)
+        self.assertEqual(len(top_month1), 2)
+        self.assertEqual(top_month1[0], ('Show Alpha', 7, 's1'))
+        self.assertEqual(top_month1[1], ('Show Beta', 3, 's2'))
+
+        histories_no_sales = [ShowSeatHistory(show_id='s1', timestamp=10, seats=10)] # only one record
+        top_no_sales = analytics.top_shows_by_sales(shows_data, histories_no_sales, n=1)
+        self.assertEqual(len(top_no_sales),0)
+
+    def test_top_artists_by_sales(self):
+        shows = [
+            Show(id='s1', actors='["Alice", "Bob"]', month=1, year=2024, show_name="S1"),
+            Show(id='s2', actors='["Alice", "Charlie"]', month=1, year=2024, show_name="S2"),
+            Show(id='s3', actors='["Bob"]', month=1, year=2024, show_name="S3"),
+            Show(id='s4', actors='["David"]', month=2, year=2024, show_name="S4"),
+        ]
+        histories = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10), ShowSeatHistory(show_id='s1', timestamp=20, seats=5), # s1 sold 5
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=20), ShowSeatHistory(show_id='s2', timestamp=20, seats=10),# s2 sold 10
+            ShowSeatHistory(show_id='s3', timestamp=10, seats=15), ShowSeatHistory(show_id='s3', timestamp=20, seats=10),# s3 sold 5
+            ShowSeatHistory(show_id='s4', timestamp=10, seats=30), ShowSeatHistory(show_id='s4', timestamp=20, seats=20),# s4 sold 10
+        ]
+        
+        result_month1 = analytics.top_artists_by_sales(shows, histories, month=1, year=2024, n=3)
+        # Month 1: Alice (s1:5 + s2:10)=15; Bob (s1:5 + s3:5)=10; Charlie (s2:10)=10
+        expected_month1 = sorted([("Alice", 15), ("Bob", 10), ("Charlie", 10)], key=lambda x: (-x[1], x[0]))
+        self.assertEqual(result_month1, expected_month1)
+
+        result_all_time = analytics.top_artists_by_sales(shows, histories, n=4)
+        # All time: Alice=15, Bob=10, Charlie=10, David=10 (s4)
+        expected_all_time = sorted([("Alice", 15), ("Bob", 10), ("Charlie", 10), ("David", 10)], key=lambda x: (-x[1], x[0]))
+        self.assertEqual(result_all_time, expected_all_time)
+
+    def test_calculate_average_sales_rate_for_show(self):
+        history_s1 = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=7), # 3 tickets / 10s = 0.3 t/s
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5), # 2 tickets / 10s = 0.2 t/s
+        ] # Avg rate = (0.3 + 0.2) / 2 = 0.25 t/s
+        rate = analytics.calculate_average_sales_rate_for_show(history_s1)
+        self.assertAlmostEqual(rate, 0.25)
+
+    def test_top_shows_by_current_sales_speed(self):
+        shows_data = [
+            Show(id='s1', show_name='Show Alpha', month=1, year=2024, actors='[]'),
+            Show(id='s1b', show_name='Show Alpha', month=1, year=2024, actors='[]'),
+            Show(id='s2', show_name='Show Beta', month=1, year=2024, actors='[]'),
+        ]
+        histories_data = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10), 
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=7), 
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5), # s1 rate 0.25 t/s
+            ShowSeatHistory(show_id='s1b', timestamp=10, seats=8),
+            ShowSeatHistory(show_id='s1b', timestamp=20, seats=7),
+            ShowSeatHistory(show_id='s1b', timestamp=30, seats=6), # s1b rate: (1+1)/2=1/10+1/10=0.1 t/s
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=20), 
+            ShowSeatHistory(show_id='s2', timestamp=20, seats=18), 
+            ShowSeatHistory(show_id='s2', timestamp=30, seats=17), # s2 rate (0.2 + 0.1)/2 = 0.15 t/s
+        ]
+        top_speed = analytics.top_shows_by_current_sales_speed(shows_data, histories_data, n=2)
+        self.assertEqual(len(top_speed), 2)
+        self.assertEqual(top_speed[0][0], 'Show Alpha')
+        self.assertAlmostEqual(top_speed[0][1], 0.25)
+        self.assertEqual(top_speed[1][0], 'Show Beta')
+        self.assertAlmostEqual(top_speed[1][1], 0.15)
+        self.assertEqual(len([x for x in top_speed if x[0]=='Show Alpha']), 1)
+
+    def test_shows_predicted_to_sell_out_soonest(self):
+        from datetime import datetime, timedelta
+        future_date = (datetime.now() + timedelta(days=10)).strftime('%Y-%m-%d %H:%M')
+        shows_data = [
+            Show(id='s1', show_name='Show Alpha', actors='[]', date=future_date), 
+            Show(id='s2', show_name='Show Beta', actors='[]', date=future_date),
+            Show(id='s3', show_name='Show Gamma', actors='[]', date=future_date), # Already sold out
+        ]
+        histories_data = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10), 
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=7), 
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5), # s1 predicts 50
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=20), 
+            ShowSeatHistory(show_id='s2', timestamp=20, seats=18), 
+            ShowSeatHistory(show_id='s2', timestamp=30, seats=17),# s2 rate 0.15, 17/0.15=113.33, pred=30+113=143
+            ShowSeatHistory(show_id='s3', timestamp=10, seats=1),
+            ShowSeatHistory(show_id='s3', timestamp=20, seats=0),
+        ]
+        predictions = analytics.shows_predicted_to_sell_out_soonest(shows_data, histories_data, n=2)
+        self.assertEqual(len(predictions), 2)
+        self.assertEqual(predictions[0], ('Show Alpha', 50, 's1'))
+        self.assertEqual(predictions[1], ('Show Beta', 143, 's2'))
+
