@@ -76,6 +76,15 @@ async def cmd_analytics_menu(message: Message, state: FSMContext):
     )
 
 
+@analytics_router.message(F.text == '/analytics')
+async def cmd_analytics_menu_text(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        LEXICON_RU['ANALYTICS_MENU_TITLE'],
+        reply_markup=analytics_main_menu_keyboard(),
+    )
+
+
 @analytics_router.message(
     F.text == LEXICON_BUTTONS_RU['/back_to_analytics_menu']
 )
