@@ -8,55 +8,36 @@ from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU
 async def main_keyboard(message: Message, session: AsyncSession):
     user_id = message.from_user.id
     user = await get_user(session, user_id)
-
-    # Получаем доступные месяцы
     months = await get_available_months(session)
 
-    # Если нет доступных месяцев, показываем только кнопку выбора актера
-    if not months:
-        if user.spectacle_full_name:
-            spectacle_full_name = user.spectacle_full_name.title()
-            button = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
-            personal_menu_keyboard = ReplyKeyboardMarkup(
-                keyboard=[
-                    [KeyboardButton(text=button)],
-                ],
-                resize_keyboard=True,
-                is_persistent=True,
-            )
-            return personal_menu_keyboard
-        else:
-            return ReplyKeyboardMarkup(
-                keyboard=[
-                    [KeyboardButton(text=LEXICON_BUTTONS_RU['/set_fighter'])],
-                ],
-                resize_keyboard=True,
-                is_persistent=True,
-            )
-
-    # Создаем кнопки для доступных месяцев
-    month_buttons = [KeyboardButton(text=month[1]) for month in months]
+    kb = []
+    if months:
+        month_buttons = [KeyboardButton(text=month[1]) for month in months]
+        kb.append(month_buttons)
 
     if user.spectacle_full_name:
         spectacle_full_name = user.spectacle_full_name.title()
-        button = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
-        personal_menu_keyboard = ReplyKeyboardMarkup(
-            keyboard=[
-                month_buttons,
-                [KeyboardButton(text=button)],
-            ],
-            resize_keyboard=True,
-            is_persistent=True,
-        )
-        return personal_menu_keyboard
+        button_text = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
+        kb.append([KeyboardButton(text=button_text)])
+    else:
+        kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/set_fighter'])])
 
-    menu_keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            month_buttons,
+    # Add Analytics button
+    kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])])
+
+    if not months and not user.spectacle_full_name:
+        kb = [
             [KeyboardButton(text=LEXICON_BUTTONS_RU['/set_fighter'])],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
+            [KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])],
+        ]
+    elif not months and user.spectacle_full_name:
+        spectacle_full_name = user.spectacle_full_name.title()
+        button_text = LEXICON_BUTTONS_RU['/shows_with'] + spectacle_full_name
+        kb = [
+            [KeyboardButton(text=button_text)],
+            [KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])],
+        ]
 
-    return menu_keyboard
+    return ReplyKeyboardMarkup(
+        keyboard=kb, resize_keyboard=True, is_persistent=True
+    )

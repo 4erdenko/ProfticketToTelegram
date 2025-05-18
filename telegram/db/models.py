@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, Column, Integer, String, func
+from sqlalchemy import (BigInteger, Boolean, Column, ForeignKey, Integer,
+                        String, func)
 
 from telegram.db import Base
 
@@ -69,3 +70,12 @@ class Show(Base):
     updated_at = Column(
         Integer
     )  # время последнего обновления (Unix timestamp)
+
+
+class ShowSeatHistory(Base):
+    __tablename__ = 'show_seat_history'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    show_id = Column(String, ForeignKey('shows.id'), index=True)
+    timestamp = Column(Integer, default=current_timestamp, index=True)
+    seats = Column(Integer)

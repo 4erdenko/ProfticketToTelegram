@@ -1,0 +1,334 @@
+import logging
+from datetime import datetime
+
+import pytz
+from aiogram import F, Router
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import Message
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
+from services.profticket import analytics
+from telegram.db.models import Show, ShowSeatHistory
+from telegram.keyboards.analytics_keyboard import (
+    RUS_TO_MONTH, analytics_main_menu_keyboard, analytics_months_keyboard,
+    analytics_months_with_alltime_keyboard)
+from telegram.keyboards.main_keyboard import main_keyboard
+from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
+
+logger = logging.getLogger(__name__)
+analytics_router = Router(name='analytics_router')
+
+# Настройка часового пояса
+try:
+    DEFAULT_TIMEZONE = pytz.timezone(settings.DEFAULT_TIMEZONE)
+except Exception:
+    DEFAULT_TIMEZONE = None
+
+
+# FSM for choosing report period
+class AnalyticsStates(StatesGroup):
+    choosing_period = State()
+    choosing_month = State()
+    choosing_month_for_top = State()
+
+
+# REPORTS объединённый
+REPORTS = {
+    LEXICON_BUTTONS_RU['/report_top_shows_sales']: {
+        'handler': analytics.top_shows_by_sales,
+        'title': LEXICON_RU['TOP_SHOWS_SALES_REPORT_TITLE'],
+    },
+    LEXICON_BUTTONS_RU['/report_top_shows_speed']: {
+        'handler': analytics.top_shows_by_current_sales_speed,
+        'title': LEXICON_RU['TOP_SHOWS_SPEED_REPORT_TITLE'],
+    },
+    LEXICON_BUTTONS_RU['/report_predict_sell_out']: {
+        'handler': analytics.shows_predicted_to_sell_out_soonest,
+        'title': LEXICON_RU['PREDICT_SELL_OUT_REPORT_TITLE'],
+    },
+    LEXICON_BUTTONS_RU['/report_top_artists_sales']: {
+        'handler': analytics.top_artists_by_sales,
+        'title': LEXICON_RU['TOP_ARTISTS_REPORT'],
+    },
+    # Добавляем новые отчёты по возвратам
+    LEXICON_BUTTONS_RU['/report_top_shows_returns']: {
+        'handler': analytics.top_shows_by_returns,
+        'title': LEXICON_RU['TOP_SHOWS_RETURNS_REPORT_TITLE'],
+    },
+    LEXICON_BUTTONS_RU['/report_top_shows_return_rate']: {
+        'handler': analytics.top_shows_by_return_rate,
+        'title': LEXICON_RU['TOP_SHOWS_RETURN_RATE_REPORT_TITLE'],
+    },
+}
+
+
+# --- Navigation Handlers ---
+@analytics_router.message(F.text == LEXICON_BUTTONS_RU['/analytics_menu'])
+async def cmd_analytics_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        LEXICON_RU['ANALYTICS_MENU_TITLE'],
+        reply_markup=analytics_main_menu_keyboard(),
+    )
+
+
+@analytics_router.message(
+    F.text == LEXICON_BUTTONS_RU['/back_to_analytics_menu']
+)
+async def cmd_back_to_analytics_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        LEXICON_RU['ANALYTICS_MENU_TITLE'],
+        reply_markup=analytics_main_menu_keyboard(),
+    )
+
+
+@analytics_router.message(F.text == LEXICON_BUTTONS_RU['/back_to_main_menu'])
+async def cmd_back_to_main_menu(
+    message: Message, session: AsyncSession, state: FSMContext
+):
+    await state.clear()
+    await message.answer(
+        LEXICON_RU['MAIN_MENU'],
+        reply_markup=await main_keyboard(message, session),
+    )
+
+
+# --- Report Type Selection (initiates period choice) ---
+@analytics_router.message(
+    F.text.in_(
+        [
+            LEXICON_BUTTONS_RU['/report_top_shows_sales'],
+            LEXICON_BUTTONS_RU['/report_top_shows_speed'],
+            LEXICON_BUTTONS_RU['/report_top_artists_sales'],
+            # Добавляем новые отчёты в обработчик
+            LEXICON_BUTTONS_RU['/report_top_shows_returns'],
+            LEXICON_BUTTONS_RU['/report_top_shows_return_rate'],
+        ]
+    )
+)
+async def cmd_select_report_type(
+    message: Message, state: FSMContext, session: AsyncSession
+):
+    # Получаем все доступные месяцы из базы
+    shows = (await session.execute(select(Show))).scalars().all()
+    months = sorted(
+        set((s.month, s.year) for s in shows if s.month and s.year)
+    )
+    if not months:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
+        return
+    await state.set_state(AnalyticsStates.choosing_month_for_top)
+    await state.update_data(report_type_to_generate=message.text)
+    await message.answer(
+        LEXICON_RU['CHOOSE_REPORT_PERIOD'],
+        reply_markup=analytics_months_with_alltime_keyboard(months),
+    )
+
+
+@analytics_router.message(
+    F.text == LEXICON_BUTTONS_RU['/report_predict_sell_out']
+)
+async def cmd_select_soldout_report(
+    message: Message, state: FSMContext, session: AsyncSession
+):
+    # Получаем все доступные месяцы из базы
+    shows = (await session.execute(select(Show))).scalars().all()
+    months = sorted(
+        set((s.month, s.year) for s in shows if s.month and s.year)
+    )
+    if not months:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
+        return
+    await state.set_state(AnalyticsStates.choosing_month)
+    await state.update_data(report_type_to_generate=message.text)
+    await message.answer(
+        LEXICON_RU['CHOOSE_REPORT_PERIOD'],
+        reply_markup=analytics_months_keyboard(months),
+    )
+
+
+# --- Period Selection & Report Generation ---
+@analytics_router.message(StateFilter(AnalyticsStates.choosing_month_for_top))
+async def cmd_generate_top_report_month(
+    message: Message, session: AsyncSession, state: FSMContext
+):
+    user_data = await state.get_data()
+    text = message.text.strip()
+    await state.clear()
+    if text == LEXICON_BUTTONS_RU['/period_all_time']:
+        month, year = None, None
+        period_text = ' (за всё время)'
+    else:
+        try:
+            text_parts = text.split()
+            if len(text_parts) != 2:
+                await message.answer(LEXICON_RU['ERROR_MSG'])
+                return
+            rus_month_name = text_parts[0]
+            year = int(text_parts[1])
+            month = RUS_TO_MONTH.get(rus_month_name)
+            if not month:
+                await message.answer(LEXICON_RU['ERROR_MSG'])
+                return
+            period_text = f' (за {text})'
+        except Exception:
+            await message.answer(LEXICON_RU['ERROR_MSG'])
+            return
+    report_type_key = user_data.get('report_type_to_generate')
+    analytics_func = REPORTS[report_type_key]['handler']
+    report_title = REPORTS[report_type_key]['title']
+
+    # Логгирование запроса аналитики
+    period = (
+        text if text != LEXICON_BUTTONS_RU['/period_all_time'] else 'all time'
+    )
+    logger.info(
+        f'User {message.from_user.full_name} (@{message.from_user.username}, '
+        f'id={message.from_user.id}) '
+        f"analytics '{report_type_key}' for {period}"
+    )
+
+    await message.answer(
+        LEXICON_RU['WAIT_MSG'], reply_markup=analytics_main_menu_keyboard()
+    )
+    all_shows = (await session.execute(select(Show))).scalars().all()
+    all_histories = (
+        (await session.execute(select(ShowSeatHistory))).scalars().all()
+    )
+    if not all_shows or not all_histories:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
+        return
+    results = analytics_func(
+        shows=all_shows, histories=all_histories, month=month, year=year, n=10
+    )
+    if not results:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
+        return
+    response_lines = [f'{report_title}{period_text}:']
+
+    # Форматирование результата в зависимости от типа отчёта
+    if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
+        for i, (name, sold, _id) in enumerate(results, 1):
+            response_lines.append(f'{i}. {name} — продано: {sold} бил.')
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_top_artists_sales']:
+        for i, (artist, sold) in enumerate(results, 1):
+            response_lines.append(
+                f'{i}. {artist} — уч. в продажах: {sold} бил.'
+            )
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
+        for i, (name, rate_sec, _id) in enumerate(results, 1):
+            rate_day = rate_sec * 60 * 60 * 24
+            response_lines.append(
+                f'{i}. {name} — ~{rate_day:.1f} '
+                f"{LEXICON_RU['SALES_SPEED_UNIT_PER_DAY']}"
+            )
+    # Добавляем форматирование для новых отчётов
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_returns']:
+        for i, (name, returns, _id) in enumerate(results, 1):
+            response_lines.append(f'{i}. {name} — возвратов: {returns} бил.')
+    elif (
+        report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_return_rate']
+    ):
+        for i, (name, rate, _id) in enumerate(results, 1):
+            # Форматируем процент с одним знаком после запятой
+            percent = rate * 100
+            response_lines.append(f'{i}. {name} — возвратов: {percent:.1f}%')
+    if len(response_lines) > 1:
+        await message.answer('\n'.join(response_lines))
+    else:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
+
+
+@analytics_router.message(StateFilter(AnalyticsStates.choosing_month))
+async def cmd_generate_soldout_report(
+    message: Message, session: AsyncSession, state: FSMContext
+):
+    await state.clear()
+    try:
+        text = message.text.strip()
+        text_parts = text.split()
+        if len(text_parts) != 2:
+            await message.answer(LEXICON_RU['ERROR_MSG'])
+            return
+        rus_month_name = text_parts[0]
+        year = int(text_parts[1])
+        month = RUS_TO_MONTH.get(rus_month_name)
+        if not month:
+            await message.answer(LEXICON_RU['ERROR_MSG'])
+            return
+    except Exception:
+        await message.answer(LEXICON_RU['ERROR_MSG'])
+        return
+    analytics_func = REPORTS[LEXICON_BUTTONS_RU['/report_predict_sell_out']][
+        'handler'
+    ]
+    report_title = REPORTS[LEXICON_BUTTONS_RU['/report_predict_sell_out']][
+        'title'
+    ]
+    period_text = f' (за {text})'
+
+    # Логгирование запроса аналитики
+    period = (
+        text if text != LEXICON_BUTTONS_RU['/period_all_time'] else 'all time'
+    )
+    logger.info(
+        f'User {message.from_user.full_name} (@{message.from_user.username}, '
+        f"id={message.from_user.id}) analytics '{report_title}' for {period}"
+    )
+
+    await message.answer(
+        LEXICON_RU['WAIT_MSG'], reply_markup=analytics_main_menu_keyboard()
+    )
+
+    all_shows = (await session.execute(select(Show))).scalars().all()
+    all_histories = (
+        (await session.execute(select(ShowSeatHistory))).scalars().all()
+    )
+
+    if not all_shows or not all_histories:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
+        return
+
+    results = analytics_func(
+        shows=all_shows, histories=all_histories, month=month, year=year, n=10
+    )
+
+    if not results:
+        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
+        return
+
+    response_lines = [f'{report_title}{period_text}:']
+    for i, (name, ts, _id) in enumerate(results, 1):
+        date_str = format_timestamp_to_date(ts, include_year=True)
+        response_lines.append(f'{i}. {name} — ожидаемый sold out: {date_str}')
+    await message.answer('\n'.join(response_lines))
+
+
+# Функция для форматирования timestamp в читаемую дату
+def format_timestamp_to_date(timestamp: int, include_year: bool = True) -> str:
+    """
+    Форматирует timestamp в читаемую строку с датой и временем.
+
+    :param timestamp: Unix timestamp
+    :param include_year: Включать ли год в форматировании
+    :return: Строка с отформатированной датой
+    """
+    try:
+        dt_object = datetime.fromtimestamp(timestamp)
+        if DEFAULT_TIMEZONE:
+            dt_object = dt_object.astimezone(DEFAULT_TIMEZONE)
+
+        if include_year:
+            date_format = '%d %b %Y %H:%M'
+        else:
+            date_format = '%d %b %H:%M'
+
+        return dt_object.strftime(date_format)
+    except Exception as e:
+        logger.error(f'Error formatting timestamp {timestamp}: {e}')
+        return f'{timestamp} (ошибка форматирования)'
