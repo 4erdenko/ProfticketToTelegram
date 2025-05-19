@@ -215,18 +215,57 @@ def top_artists_by_sales(
 def calculate_average_sales_rate_for_show(
     history_for_show: Sequence[ShowSeatHistory],
 ) -> Optional[float]:
+    """
+    Рассчитывает среднюю скорость продаж билетов в билетах/секунду.
+    Улучшенная версия с фильтрацией выбросов
+    и минимальным временным интервалом.
+    """
     if len(history_for_show) < 2:
         return None
+
     records = sorted(history_for_show, key=lambda r: r.timestamp)
+
+    # Минимальный интервал времени между записями для учета в расчете (3 часа)
+    MIN_INTERVAL_SECONDS = 3 * 60 * 60
+
+    # Максимально реалистичная скорость продаж (билетов в секунду)
+    # ~5 билетов/час = 120 билетов/день
+    MAX_REALISTIC_RATE = 5.0 / 3600
+
     rates = []
+
     for prev, curr in zip(records, records[1:]):
         dt = curr.timestamp - prev.timestamp
         ds = prev.seats - curr.seats
-        if dt > 0 and ds > 0:
-            rates.append(ds / dt)
+
+        # Учитываем только положительные продажи
+        if dt <= 0 or ds <= 0:
+            continue
+
+        # Игнорируем слишком короткие интервалы
+        if dt < MIN_INTERVAL_SECONDS:
+            continue
+
+        # Рассчитываем скорость продаж в этом интервале (билетов/секунду)
+        rate = ds / dt
+
+        # Ограничиваем максимальную скорость разумным значением
+        rate = min(rate, MAX_REALISTIC_RATE)
+
+        rates.append(rate)
+
     if not rates:
         return None
-    return mean(rates) if rates else None
+
+    # Используем медиану вместо среднего для уменьшения влияния выбросов
+    rates.sort()
+    n = len(rates)
+    if n % 2 == 0:
+        # Четное количество элементов: средняя из двух средних значений
+        return (rates[n // 2 - 1] + rates[n // 2]) / 2
+    else:
+        # Нечетное количество элементов: середина
+        return rates[n // 2]
 
 
 def top_shows_by_current_sales_speed(
@@ -250,7 +289,12 @@ def top_shows_by_current_sales_speed(
             if show.show_name not in id_by_name:
                 id_by_name[show.show_name] = show.id
 
-    agg_speed = {name: max(rates) for name, rates in speed_by_name.items()}
+    agg_speed = {}
+    for name, rates in speed_by_name.items():
+        if len(rates) > 0:
+            # Используем среднюю скорость всех показов спектакля
+            agg_speed[name] = sum(rates) / len(rates)
+
     ordered = sorted(agg_speed.items(), key=lambda x: -x[1])
     result = []
     for show_name, rate in ordered[:n]:
