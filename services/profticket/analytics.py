@@ -185,44 +185,27 @@ def top_artists_by_sales(
             except json.JSONDecodeError:
                 actors_list = []
 
-            # Обработка списка актеров с учетом титулов
-            i = 0
-            while i < len(actors_list):
-                current_actor = (
-                    actors_list[i].strip()
-                    if isinstance(actors_list[i], str)
-                    else ''
-                )
-
-                # Пропускаем пустые строки
-                if not current_actor:
-                    i += 1
+            # Отфильтровываем только реальных актеров, исключая титулы
+            real_actors = []
+            for actor in actors_list:
+                if not isinstance(actor, str) or not actor.strip():
                     continue
 
-                # Проверяем, является ли текущая строка титулом
-                current_lower = current_actor.lower()
+                actor_name = actor.strip()
+                actor_lower = actor_name.lower()
+
+                # Проверяем, не является ли строка титулом
                 is_title = any(
-                    title in current_lower for title in titles_to_merge
+                    title in actor_lower for title in titles_to_merge
                 )
 
-                # Если это титул и есть следующий элемент в списке (имя актера)
-                if (
-                    is_title
-                    and i + 1 < len(actors_list)
-                    and isinstance(actors_list[i + 1], str)
-                    and actors_list[i + 1].strip()
-                ):
-                    # Пропускаем титул, считая продажи только для актера
-                    i += 1  # Переходим к имени актера
-                    artist_name = actors_list[i].strip()
-                    artist_aggregated_sales[artist_name] += sold_for_this_show
-                else:
-                    # Это имя актера без титула
-                    artist_aggregated_sales[
-                        current_actor
-                    ] += sold_for_this_show
+                # Добавляем только реальные имена актеров, пропускаем титулы
+                if not is_title:
+                    real_actors.append(actor_name)
 
-                i += 1
+            # Добавляем продажи только для реальных актеров
+            for actor_name in real_actors:
+                artist_aggregated_sales[actor_name] += sold_for_this_show
 
     return sorted(
         artist_aggregated_sales.items(), key=lambda x: (-x[1], x[0])
