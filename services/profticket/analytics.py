@@ -161,20 +161,20 @@ def top_artists_by_sales(
         sold = _calculate_real_sales_from_history(h_rows)
         if sold > 0:
             show_total_sales[show.id] = sold
-            
+
     # Список титулов, которые нужно пропустить или объединить
     titles_to_merge = [
-        "народный артист россии", 
-        "народная артистка россии",
-        "заслуженный артист россии", 
-        "заслуженная артистка россии",
-        "лауреат государственных премий",
-        "заслуженный деятель искусств",
-        "лауреат премии"
+        'народный артист россии',
+        'народная артистка россии',
+        'заслуженный артист россии',
+        'заслуженная артистка россии',
+        'лауреат государственных премий',
+        'заслуженный деятель искусств',
+        'лауреат премии',
     ]
-            
+
     artist_aggregated_sales = defaultdict(int)
-    
+
     for show in filtered_shows:
         sold_for_this_show = show_total_sales.get(show.id, 0)
         if sold_for_this_show > 0:
@@ -184,33 +184,46 @@ def top_artists_by_sales(
                     actors_list = []
             except json.JSONDecodeError:
                 actors_list = []
-                
+
             # Обработка списка актеров с учетом титулов
             i = 0
             while i < len(actors_list):
-                current_actor = actors_list[i].strip() if isinstance(actors_list[i], str) else ""
-                
+                current_actor = (
+                    actors_list[i].strip()
+                    if isinstance(actors_list[i], str)
+                    else ''
+                )
+
                 # Пропускаем пустые строки
                 if not current_actor:
                     i += 1
                     continue
-                
+
                 # Проверяем, является ли текущая строка титулом
                 current_lower = current_actor.lower()
-                is_title = any(title in current_lower for title in titles_to_merge)
-                
+                is_title = any(
+                    title in current_lower for title in titles_to_merge
+                )
+
                 # Если это титул и есть следующий элемент в списке (имя актера)
-                if is_title and i + 1 < len(actors_list) and isinstance(actors_list[i+1], str) and actors_list[i+1].strip():
+                if (
+                    is_title
+                    and i + 1 < len(actors_list)
+                    and isinstance(actors_list[i + 1], str)
+                    and actors_list[i + 1].strip()
+                ):
                     # Пропускаем титул, считая продажи только для актера
                     i += 1  # Переходим к имени актера
                     artist_name = actors_list[i].strip()
                     artist_aggregated_sales[artist_name] += sold_for_this_show
                 else:
                     # Это имя актера без титула
-                    artist_aggregated_sales[current_actor] += sold_for_this_show
-                
+                    artist_aggregated_sales[
+                        current_actor
+                    ] += sold_for_this_show
+
                 i += 1
-    
+
     return sorted(
         artist_aggregated_sales.items(), key=lambda x: (-x[1], x[0])
     )[:n]

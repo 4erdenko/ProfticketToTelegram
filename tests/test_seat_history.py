@@ -241,68 +241,87 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             key=lambda x: (-x[1], x[0]),
         )
         self.assertEqual(result_all_time, expected_all_time)
-        
+
     def test_top_artists_by_sales_with_titles(self):
         # Тест для проверки обработки титулов
         shows = [
             Show(
                 id='s1',
-                actors='["Народный артист России", "Олег Меньшиков", "Иван Иванов"]',
+                actors='["Народный артист России", "Олег Меньшиков", '
+                       '"Иван Иванов"]',
                 month=1,
                 year=2024,
                 show_name='S1',
             ),
             Show(
                 id='s2',
-                actors='["Народная артистка России", "Анна Петрова", "лауреат Государственных премий", "Петр Сидоров"]',
+                actors='["Народная артистка России", "Анна Петрова", '
+                       '"лауреат Государственных премий", "Петр Сидоров"]',
                 month=1,
                 year=2024,
                 show_name='S2',
             ),
             Show(
                 id='s3',
-                actors='["Иван Иванов", "Заслуженный артист России", "Сергей Смирнов"]', 
+                actors='["Иван Иванов", "Заслуженный артист России", '
+                       '"Сергей Смирнов"]',
                 month=1,
                 year=2024,
-                show_name='S3'
+                show_name='S3',
             ),
         ]
-        
+
         histories = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=20),
-            ShowSeatHistory(show_id='s1', timestamp=20, seats=10),  # s1 sold 10
+            ShowSeatHistory(
+                show_id='s1', timestamp=20, seats=10
+            ),  # s1 sold 10
             ShowSeatHistory(show_id='s2', timestamp=10, seats=30),
-            ShowSeatHistory(show_id='s2', timestamp=20, seats=18),  # s2 sold 12
+            ShowSeatHistory(
+                show_id='s2', timestamp=20, seats=18
+            ),  # s2 sold 12
             ShowSeatHistory(show_id='s3', timestamp=10, seats=25),
             ShowSeatHistory(show_id='s3', timestamp=20, seats=17),  # s3 sold 8
         ]
 
         result = analytics.top_artists_by_sales(shows, histories, n=10)
-        
+
         # Проверяем, что титулы правильно обрабатываются
-        titles = ["Народный артист России", "Народная артистка России", 
-                 "лауреат Государственных премий", "Заслуженный артист России"]
-        
+        titles = [
+            'Народный артист России',
+            'Народная артистка России',
+            'лауреат Государственных премий',
+            'Заслуженный артист России',
+        ]
+
         # Титулы не должны быть в результате
         for title in titles:
             self.assertFalse(any(artist[0] == title for artist in result))
-        
+
         # Проверяем, что актеры правильно учтены
         actors_expected = {
-            'Олег Меньшиков': 10, 
+            'Олег Меньшиков': 10,
             'Иван Иванов': 18,  # 10 + 8 (участвует в s1 и s3)
             'Анна Петрова': 12,
             'Петр Сидоров': 12,
-            'Сергей Смирнов': 8
+            'Сергей Смирнов': 8,
         }
-        
+
         for artist, count in result:
-            self.assertEqual(count, actors_expected.get(artist, 0), 
-                            f"Неверное количество продаж для {artist}: {count} (ожидалось {actors_expected.get(artist, 0)})")
-        
+            self.assertEqual(
+                count,
+                actors_expected.get(artist, 0),
+                f'Неверное количество продаж для {artist}: {count} '
+                f'(ожидалось {actors_expected.get(artist, 0)})',
+            )
+
         # Проверяем общее количество артистов в результате
-        self.assertEqual(len(result), len(actors_expected),
-                         f"Неверное количество артистов в результате: {len(result)} (ожидалось {len(actors_expected)})")
+        self.assertEqual(
+            len(result),
+            len(actors_expected),
+            f'Неверное количество артистов в результате: {len(result)} '
+            f'(ожидалось {len(actors_expected)})',
+        )
 
     def test_calculate_average_sales_rate_for_show(self):
         history_s1 = [
