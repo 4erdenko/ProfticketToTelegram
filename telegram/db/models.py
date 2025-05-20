@@ -1,10 +1,10 @@
 from datetime import datetime
-from config import settings
-import pytz
 
+import pytz
 from sqlalchemy import (BigInteger, Boolean, Column, ForeignKey, Integer,
                         String, func)
 
+from config import settings
 from telegram.db import Base
 
 
@@ -46,7 +46,6 @@ class User(Base):
 
     @bot_blocked_date.setter
     def bot_blocked_date(self, value):
-        tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
         self._bot_blocked_date = int(value.timestamp()) if value else None
 
 

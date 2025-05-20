@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime
 from typing import List, Optional, Sequence, Tuple
@@ -27,16 +26,12 @@ def filter_data_by_period(
             and s.year == year
             and not getattr(s, 'is_deleted', False)
         ]
-        # Ограничиваем истории только этим месяцем
-        start_dt = datetime(year, month, 1)
-        end_dt = datetime(year, month, monthrange(year, month)[1], 23, 59, 59)
+
         filtered_ids = {s.id for s in filtered_shows}
         filtered_histories = [
-            h
-            for h in histories
-            if h.show_id in filtered_ids
-            and start_dt.timestamp() <= h.timestamp <= end_dt.timestamp()
+            h for h in histories if h.show_id in filtered_ids
         ]
+
     else:
         filtered_shows = [
             s for s in shows if not getattr(s, 'is_deleted', False)
@@ -153,7 +148,9 @@ def get_net_sales_and_returns(hist):
     return sold, returned
 
 
-def predict_sold_out(history: Sequence[ShowSeatHistory]) -> Optional[int]:
+def predict_sold_out(
+    history: Sequence[ShowSeatHistory], show_dt: Optional[datetime] = None
+) -> Optional[int]:
     if len(history) < 2:
         return None
 
@@ -198,11 +195,6 @@ def predict_sold_out(history: Sequence[ShowSeatHistory]) -> Optional[int]:
 
     prediction = last.timestamp + int(seconds_left)
     # финальная проверка: sold-out раньше показа?
-    show_dt = parse_show_date(
-        getattr(last, 'show', None).date
-        if hasattr(last, 'show') and getattr(last, 'show', None)
-        else None
-    )
     if show_dt and prediction > show_dt.timestamp():
         return None
 
@@ -436,7 +428,7 @@ def shows_predicted_to_sell_out_soonest(
         h_rows = history_buckets.get(show.id, [])
         if len(h_rows) < 2:
             continue
-        prediction_ts = predict_sold_out(h_rows)
+        prediction_ts = predict_sold_out(h_rows, show_dt)
         if prediction_ts and prediction_ts > now.timestamp():
             result.append((show.show_name, prediction_ts, show.id))
     result.sort(key=lambda x: x[1])

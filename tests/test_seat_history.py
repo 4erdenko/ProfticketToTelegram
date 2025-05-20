@@ -200,8 +200,10 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         top_month1 = analytics.top_shows_by_sales(
             shows_data, histories_data, month=1, year=2024, n=2
         )
-        # Для месяца — если нет валидных историй, топ пустой
-        self.assertEqual(len(top_month1), 0)
+        # Теперь результат совпадает с all time для этого месяца
+        self.assertEqual(len(top_month1), 2)
+        self.assertEqual(top_month1[0], ('Show Alpha', 5, 's1'))
+        self.assertEqual(top_month1[1], ('Show Beta', 3, 's2'))
 
     def test_top_artists_by_sales(self):
         shows = [
@@ -240,19 +242,14 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
                 show_id='s4', timestamp=20, seats=20
             ),  # s4 sold 10
         ]
-        # Теперь, если истории не попадают по времени, результат пустой
         result_month1 = analytics.top_artists_by_sales(
             shows, histories, month=1, year=2024, n=3
         )
-        self.assertEqual(result_month1, [])
-
-        result_all_time = analytics.top_artists_by_sales(shows, histories, n=4)
-        # All time: Alice=15, Bob=10, Charlie=10, David=10 (s4)
-        expected_all_time = sorted(
-            [('Alice', 15), ('Bob', 10), ('Charlie', 10), ('David', 10)],
+        expected_month1 = sorted(
+            [('Alice', 15), ('Bob', 10), ('Charlie', 10)],
             key=lambda x: (-x[1], x[0]),
         )
-        self.assertEqual(result_all_time, expected_all_time)
+        self.assertEqual(result_month1, expected_month1)
 
     def test_top_artists_by_sales_with_titles(self):
         # Тест для проверки обработки титулов

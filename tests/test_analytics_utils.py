@@ -39,8 +39,9 @@ class AnalyticsUtilsTestCase(unittest.TestCase):
         )
         self.assertEqual(len(filtered_shows), 1)
         self.assertEqual(filtered_shows[0].id, 's1')
-        # buckets может быть пустым, если нет историй в этом месяце
-        self.assertTrue('s1' not in buckets or len(buckets['s1']) == 0)
+        # Теперь bucket всегда содержит все истории для show_id
+        self.assertIn('s1', buckets)
+        self.assertEqual(len(buckets['s1']), 2)
 
     def test_parse_show_date(self):
         dt = parse_show_date('2024-07-01 19:00')
