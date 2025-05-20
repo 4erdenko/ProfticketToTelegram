@@ -127,7 +127,7 @@ async def get_available_months(session: AsyncSession) -> list:
         query = (
             select(Show)
             .where(
-                Show.month == month_number, Show.year == year, Show.seats > 0
+                Show.month == month_number, Show.year == year, Show.seats > 0, Show.is_deleted == False
             )
             .limit(1)
         )
@@ -246,7 +246,7 @@ async def get_shows_from_db(
     Returns:
         str: Formatted message with shows information
     """
-    query = select(Show).where(Show.month == month, Show.year == year)
+    query = select(Show).where(Show.month == month, Show.year == year, Show.is_deleted == False)
     result = await session.execute(query)
     shows = result.scalars().all()
 

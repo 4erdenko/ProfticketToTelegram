@@ -70,6 +70,7 @@ class Show(Base):
     updated_at = Column(
         Integer
     )  # время последнего обновления (Unix timestamp)
+    is_deleted = Column(Boolean, default=False)  # мягкое удаление
 
 
 class ShowSeatHistory(Base):

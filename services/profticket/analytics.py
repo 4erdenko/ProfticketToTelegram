@@ -19,10 +19,10 @@ def filter_data_by_period(
 ) -> tuple[list[Show], dict[str, list[ShowSeatHistory]]]:
     if month is not None and year is not None:
         filtered_shows = [
-            s for s in shows if s.month == month and s.year == year
+            s for s in shows if s.month == month and s.year == year and not getattr(s, 'is_deleted', False)
         ]
     else:
-        filtered_shows = list(shows)
+        filtered_shows = [s for s in shows if not getattr(s, 'is_deleted', False)]
     filtered_ids = {s.id for s in filtered_shows}
     filtered_histories = [h for h in histories if h.show_id in filtered_ids]
     buckets = defaultdict(list)
@@ -89,25 +89,75 @@ def _calculate_show_sales_from_history(
 
 
 def predict_sold_out(history: Sequence[ShowSeatHistory]) -> Optional[int]:
+    """
+    Прогнозирует, когда шоу будет распродано, основываясь на истории продаж.
+    Использует те же принципы фильтрации, что и при расчете скорости продаж.
+    
+    Returns:
+        Timestamp, когда ожидается полная продажа билетов, или None, если прогноз невозможен.
+    """
     if len(history) < 2:
         return None
+        
     records = sorted(history, key=lambda r: r.timestamp)
+    
+    # Минимальный интервал времени между записями для учета в расчете (1 час)
+    # Уменьшен с 3 часов для лучшей работы с данными, собираемыми раз в час
+    MIN_INTERVAL_SECONDS = 1 * 60 * 60
+    
+    # Максимально реалистичная скорость продаж (билетов в секунду)
+    # ~5 билетов/час = 120 билетов/день
+    MAX_REALISTIC_RATE = 5.0 / 3600
+    
     rates = []
+    
     for prev, curr in zip(records, records[1:]):
         dt = curr.timestamp - prev.timestamp
         ds = prev.seats - curr.seats
-        # Возвраты билетов (ds < 0) не учитываем, только продажи
-        if dt > 0 and ds > 0:
-            rates.append(ds / dt)
+        
+        # Учитываем только положительные продажи
+        if dt <= 0 or ds <= 0:
+            continue
+            
+        # Игнорируем слишком короткие интервалы
+        if dt < MIN_INTERVAL_SECONDS:
+            continue
+            
+        # Рассчитываем скорость продаж в этом интервале (билетов/секунду)
+        rate = ds / dt
+        
+        # Ограничиваем максимальную скорость разумным значением
+        rate = min(rate, MAX_REALISTIC_RATE)
+        
+        rates.append(rate)
+    
     if not rates:
         return None
-    avg_rate = mean(rates)
+    
+    # Используем медиану вместо среднего для уменьшения влияния выбросов
+    rates.sort()
+    n = len(rates)
+    if n % 2 == 0:
+        # Четное количество элементов: средняя из двух средних значений
+        avg_rate = (rates[n // 2 - 1] + rates[n // 2]) / 2
+    else:
+        # Нечетное количество элементов: середина
+        avg_rate = rates[n // 2]
+    
     if avg_rate <= 0:
         return None
+        
     last = records[-1]
     if last.seats <= 0:
         return None
+        
     seconds_left = last.seats / avg_rate
+    
+    # Если прогноз слишком далекий (более 6 месяцев), считаем его недостоверным
+    MAX_PREDICTION_SECONDS = 6 * 30 * 24 * 60 * 60  # примерно 6 месяцев
+    if seconds_left > MAX_PREDICTION_SECONDS:
+        return None
+    
     return last.timestamp + int(seconds_left)
 
 
@@ -225,8 +275,9 @@ def calculate_average_sales_rate_for_show(
 
     records = sorted(history_for_show, key=lambda r: r.timestamp)
 
-    # Минимальный интервал времени между записями для учета в расчете (3 часа)
-    MIN_INTERVAL_SECONDS = 3 * 60 * 60
+    # Минимальный интервал времени между записями для учета в расчете (1 час)
+    # Уменьшен с 3 часов для лучшей работы с данными, собираемыми раз в час
+    MIN_INTERVAL_SECONDS = 1 * 60 * 60
 
     # Максимально реалистичная скорость продаж (билетов в секунду)
     # ~5 билетов/час = 120 билетов/день
@@ -241,22 +292,22 @@ def calculate_average_sales_rate_for_show(
         # Учитываем только положительные продажи
         if dt <= 0 or ds <= 0:
             continue
-
+            
         # Игнорируем слишком короткие интервалы
         if dt < MIN_INTERVAL_SECONDS:
             continue
-
+            
         # Рассчитываем скорость продаж в этом интервале (билетов/секунду)
         rate = ds / dt
-
+        
         # Ограничиваем максимальную скорость разумным значением
         rate = min(rate, MAX_REALISTIC_RATE)
-
+        
         rates.append(rate)
-
+    
     if not rates:
         return None
-
+        
     # Используем медиану вместо среднего для уменьшения влияния выбросов
     rates.sort()
     n = len(rates)
