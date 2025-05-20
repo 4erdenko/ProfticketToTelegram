@@ -63,7 +63,7 @@ class ShowUpdateService:
 
             # Получаем текущие данные о местах
             current_shows = await session.execute(
-                select(Show).where(Show.month == month, Show.year == year)
+                select(Show).where(Show.month == month, Show.year == year, Show.is_deleted == False)
             )
             current_shows_dict = {
                 show.id: show.seats for show in current_shows.scalars()
@@ -95,6 +95,7 @@ class ShowUpdateService:
                     'month': month,
                     'year': year,
                     'updated_at': current_time,
+                    'is_deleted': False,
                 }
 
                 # Используем insert().on_conflict_do_update()
@@ -112,14 +113,17 @@ class ShowUpdateService:
                     )
                 )
 
-            # Удаляем устаревшие записи
+            # Мягко удаляем устаревшие записи
             all_event_ids = list(shows.keys())
             await session.execute(
-                delete(Show).where(
+                Show.__table__.update()
+                .where(
                     Show.month == month,
                     Show.year == year,
                     Show.id.notin_(all_event_ids),
+                    Show.is_deleted == False
                 )
+                .values(is_deleted=True)
             )
 
             await session.commit()
