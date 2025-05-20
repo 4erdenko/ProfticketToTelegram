@@ -1,5 +1,21 @@
 import sys
 import types
+import datetime
+
+# --- PYTZ MOCK (глобально, до любых импортов) ---
+pytz = types.ModuleType('pytz')
+class MockTimezone(datetime.tzinfo):
+    def localize(self, dt: datetime.datetime) -> datetime.datetime:
+        return dt.replace(tzinfo=self)
+    def utcoffset(self, dt):
+        return datetime.timedelta(hours=3)  # Moscow offset
+    def dst(self, dt):
+        return datetime.timedelta(0)
+def mock_timezone(tz):
+    return MockTimezone()
+pytz.timezone = mock_timezone
+sys.modules['pytz'] = pytz
+# --- END PYTZ MOCK ---
 
 import pytest
 
@@ -19,6 +35,7 @@ def stub_modules(monkeypatch):
         PROXY_URL = ''
         STOP_AFTER_ATTEMPT = 3
         DEFAULT_TIMEZONE = 'Europe/Moscow'
+        MAX_CONSECUTIVE_ERRORS = 3
 
     config.settings = Settings()
     modules['config'] = config
@@ -79,10 +96,6 @@ def stub_modules(monkeypatch):
     tenacity.wait_exponential = lambda *a, **k: None
     modules['tenacity'] = tenacity
 
-    pytz = types.ModuleType('pytz')
-    pytz.timezone = lambda tz: None
-    modules['pytz'] = pytz
-
     dateutil = types.ModuleType('dateutil')
     rdelta = types.ModuleType('dateutil.relativedelta')
 
@@ -102,6 +115,7 @@ def stub_modules(monkeypatch):
             self.text = text
 
     aiogram_types.Message = Message
+    aiogram.types = aiogram_types  # Добавляем types как атрибут aiogram
     modules['aiogram'] = aiogram
     modules['aiogram.types'] = aiogram_types
 

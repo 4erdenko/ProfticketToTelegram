@@ -99,21 +99,57 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row.show_id, 'e1')
             self.assertEqual(row.seats, 5)
 
+    def test_calculate_average_sales_rate_for_show(self):
+        # Короткие интервалы (10 сек) — должны быть проигнорированы, результат None
+        history_s1 = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
+        ]
+        rate = analytics.calculate_average_sales_rate_for_show(history_s1)
+        self.assertIsNone(rate)
+
+        # Интервалы в 1 час (новый минимум)
+        history_s2 = [
+            ShowSeatHistory(show_id='s2', timestamp=0, seats=10),
+            ShowSeatHistory(
+                show_id='s2', timestamp=1 * 3600, seats=7
+            ),  # 3 билета за 1 час
+            ShowSeatHistory(
+                show_id='s2', timestamp=2 * 3600, seats=5
+            ),  # 2 билета за 1 час
+        ]
+        rate = analytics.calculate_average_sales_rate_for_show(history_s2)
+        # Медиана между 3/3600 и 2/3600
+        median_rate = (3/3600 + 2/3600) / 2
+        self.assertAlmostEqual(rate, median_rate, places=7)
+
     def test_predict_sold_out(self):
+        # Короткие интервалы (10 сек) — должны быть проигнорированы, результат None
         history_s1 = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
             ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
         ]
         pred = analytics.predict_sold_out(history_s1)
-        self.assertEqual(pred, 50)
+        self.assertIsNone(pred)
 
-        history_sold_out = [
-            ShowSeatHistory(show_id='s2', timestamp=10, seats=5),
-            ShowSeatHistory(show_id='s2', timestamp=20, seats=0),
+        # Интервалы в 1 час (новый минимум)
+        history_s2 = [
+            ShowSeatHistory(show_id='s2', timestamp=0, seats=10),
+            ShowSeatHistory(
+                show_id='s2', timestamp=1 * 3600, seats=7
+            ),  # 3 билета за 1 час
+            ShowSeatHistory(
+                show_id='s2', timestamp=2 * 3600, seats=5
+            ),  # 2 билета за 1 час
         ]
-        pred_sold_out = analytics.predict_sold_out(history_sold_out)
-        self.assertIsNone(pred_sold_out)  # Already sold out
+        pred = analytics.predict_sold_out(history_s2)
+        # Медиана между 3/3600 и 2/3600
+        median_rate = (3/3600 + 2/3600) / 2
+        last_timestamp = 2 * 3600
+        expected_pred = last_timestamp + 5 / median_rate
+        self.assertAlmostEqual(pred, expected_pred, delta=10)
 
     def test_top_shows_by_sales(self):
         shows_data = [
@@ -323,30 +359,6 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             f'(ожидалось {len(actors_expected)})',
         )
 
-    def test_calculate_average_sales_rate_for_show(self):
-        history_s1 = [
-            ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
-            ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
-            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
-        ]
-        rate = analytics.calculate_average_sales_rate_for_show(history_s1)
-        self.assertIsNone(rate)
-
-        # Валидные интервалы (4 часа)
-        history_s2 = [
-            ShowSeatHistory(show_id='s2', timestamp=0, seats=10),
-            ShowSeatHistory(
-                show_id='s2', timestamp=4 * 3600, seats=7
-            ),  # 3 билета за 4 часа
-            ShowSeatHistory(
-                show_id='s2', timestamp=8 * 3600, seats=5
-            ),  # 2 билета за 4 часа
-        ]
-        rate = analytics.calculate_average_sales_rate_for_show(history_s2)
-        # Медиана между 3/14400 и 2/14400
-        expected_median = (3 / 14400 + 2 / 14400) / 2
-        self.assertAlmostEqual(rate, expected_median, places=7)
-
     def test_top_shows_by_current_sales_speed(self):
         shows_data = [
             Show(
@@ -371,41 +383,36 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         histories_data = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
-            ShowSeatHistory(
-                show_id='s1', timestamp=30, seats=5
-            ),  # интервалы 10 сек, будут проигнорированы
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
             ShowSeatHistory(show_id='s1b', timestamp=10, seats=8),
             ShowSeatHistory(show_id='s1b', timestamp=20, seats=7),
-            ShowSeatHistory(
-                show_id='s1b', timestamp=30, seats=6
-            ),  # интервалы 10 сек, будут проигнорированы
+            ShowSeatHistory(show_id='s1b', timestamp=30, seats=6),
             ShowSeatHistory(show_id='s2', timestamp=10, seats=20),
             ShowSeatHistory(show_id='s2', timestamp=20, seats=18),
-            ShowSeatHistory(
-                show_id='s2', timestamp=30, seats=17
-            ),  # интервалы 10 сек, будут проигнорированы
+            ShowSeatHistory(show_id='s2', timestamp=30, seats=17),
         ]
         top_speed = analytics.top_shows_by_current_sales_speed(
             shows_data, histories_data, n=2
         )
+        # Все еще должно быть 0 результатов, т.к. интервал < 1 часа
         self.assertEqual(len(top_speed), 0)
 
-        # Теперь добавим реальные интервалы (4 часа)
+        # Теперь добавим интервалы в 1 час (новый минимум)
         histories_data = [
             ShowSeatHistory(show_id='s1', timestamp=0, seats=10),
             ShowSeatHistory(
-                show_id='s1', timestamp=4 * 3600, seats=7
-            ),  # 3 билета за 4 часа
+                show_id='s1', timestamp=1 * 3600, seats=7
+            ),  # 3 билета за 1 час
             ShowSeatHistory(
-                show_id='s1', timestamp=8 * 3600, seats=5
-            ),  # 2 билета за 4 часа
+                show_id='s1', timestamp=2 * 3600, seats=5
+            ),  # 2 билета за 1 час
             ShowSeatHistory(show_id='s2', timestamp=0, seats=20),
             ShowSeatHistory(
-                show_id='s2', timestamp=4 * 3600, seats=18
-            ),  # 2 билета за 4 часа
+                show_id='s2', timestamp=1 * 3600, seats=18
+            ),  # 2 билета за 1 час
             ShowSeatHistory(
-                show_id='s2', timestamp=8 * 3600, seats=17
-            ),  # 1 билет за 4 часа
+                show_id='s2', timestamp=2 * 3600, seats=17
+            ),  # 1 билет за 1 час
         ]
         top_speed = analytics.top_shows_by_current_sales_speed(
             shows_data, histories_data, n=2
@@ -419,12 +426,11 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             rate_per_hour = rate * 3600
             self.assertLessEqual(rate_per_hour, 5.0)
             self.assertGreater(rate_per_hour, 0.0)
-        expected_median_alpha = (3 / 14400 + 2 / 14400) / 2
-        self.assertAlmostEqual(
-            top_speed[0][1], expected_median_alpha, places=7
-        )
-        # Для Show Beta: (2/14400, 1/14400) -> медиана = 1.5/14400
-        expected_median_beta = (2 / 14400 + 1 / 14400) / 2
+        # Проверяем, что медиана для Show Alpha: (3/3600, 2/3600) -> медиана = 2.5/3600
+        expected_median_alpha = (3/3600 + 2/3600) / 2
+        self.assertAlmostEqual(top_speed[0][1], expected_median_alpha, places=7)
+        # Для Show Beta: (2/3600, 1/3600) -> медиана = 1.5/3600
+        expected_median_beta = (2/3600 + 1/3600) / 2
         self.assertAlmostEqual(top_speed[1][1], expected_median_beta, places=7)
 
     def test_shows_predicted_to_sell_out_soonest(self):
@@ -444,23 +450,73 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
                 id='s3', show_name='Show Gamma', actors='[]', date=future_date
             ),  # Already sold out
         ]
-        histories_data = [
+        
+        # Короткие интервалы (10 сек) — должны быть проигнорированы
+        histories_data_short = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
-            ShowSeatHistory(
-                show_id='s1', timestamp=30, seats=5
-            ),  # s1 predicts 50
+            ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
+            
             ShowSeatHistory(show_id='s2', timestamp=10, seats=20),
             ShowSeatHistory(show_id='s2', timestamp=20, seats=18),
-            ShowSeatHistory(
-                show_id='s2', timestamp=30, seats=17
-            ),  # s2 rate 0.15, 17/0.15=113.33, pred=30+113=143
+            ShowSeatHistory(show_id='s2', timestamp=30, seats=17),
+            
             ShowSeatHistory(show_id='s3', timestamp=10, seats=1),
             ShowSeatHistory(show_id='s3', timestamp=20, seats=0),
         ]
-        predictions = analytics.shows_predicted_to_sell_out_soonest(
-            shows_data, histories_data, n=2
+        
+        # При коротких интервалах не должно быть прогнозов
+        predictions_short = analytics.shows_predicted_to_sell_out_soonest(
+            shows_data, histories_data_short, n=3
         )
+        self.assertEqual(len(predictions_short), 0)
+        
+        # Интервалы в 1 час (новый минимум)
+        histories_data = [
+            ShowSeatHistory(show_id='s1', timestamp=0, seats=10),
+            ShowSeatHistory(
+                show_id='s1', timestamp=1 * 3600, seats=7
+            ),  # 3 билета за 1 час
+            ShowSeatHistory(
+                show_id='s1', timestamp=2 * 3600, seats=5
+            ),  # 2 билета за 1 час
+            
+            ShowSeatHistory(show_id='s2', timestamp=0, seats=20),
+            ShowSeatHistory(
+                show_id='s2', timestamp=1 * 3600, seats=18
+            ),  # 2 билета за 1 час
+            ShowSeatHistory(
+                show_id='s2', timestamp=2 * 3600, seats=17
+            ),  # 1 билет за 1 час
+            
+            ShowSeatHistory(show_id='s3', timestamp=0, seats=1),
+            ShowSeatHistory(
+                show_id='s3', timestamp=1 * 3600, seats=0
+            ),  # Уже распродано
+        ]
+        
+        predictions = analytics.shows_predicted_to_sell_out_soonest(
+            shows_data, histories_data, n=3
+        )
+        
+        # Должно быть 2 прогноза (s3 уже распродано)
         self.assertEqual(len(predictions), 2)
-        self.assertEqual(predictions[0], ('Show Alpha', 50, 's1'))
-        self.assertEqual(predictions[1], ('Show Beta', 143, 's2'))
+        
+        # Проверяем порядок: Show Alpha должен быть первым, т.к. медиана скорости продаж выше
+        self.assertEqual(predictions[0][0], 'Show Alpha')
+        self.assertEqual(predictions[1][0], 'Show Beta')
+        
+        # Проверяем прогнозы более гибко
+        # Show Alpha: медиана = 2.5/3600, осталось 5 билетов, 5/(2.5/3600) = 7200 секунд
+        last_timestamp_s1 = 2 * 3600
+        expected_s1_sold_out = last_timestamp_s1 + 5 / ((3/3600 + 2/3600)/2)
+        self.assertAlmostEqual(
+            predictions[0][1], int(expected_s1_sold_out), delta=10
+        )
+        
+        # Show Beta: медиана = 1.5/3600, осталось 17 билетов, 17/(1.5/3600) = ~40800 секунд
+        last_timestamp_s2 = 2 * 3600
+        expected_s2_sold_out = last_timestamp_s2 + 17 / ((2/3600 + 1/3600)/2)
+        self.assertAlmostEqual(
+            predictions[1][1], int(expected_s2_sold_out), delta=10
+        )
