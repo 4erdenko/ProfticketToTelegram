@@ -1,4 +1,6 @@
 from datetime import datetime
+from config import settings
+import pytz
 
 from sqlalchemy import (BigInteger, Boolean, Column, ForeignKey, Integer,
                         String, func)
@@ -7,7 +9,8 @@ from telegram.db import Base
 
 
 def current_timestamp():
-    return int(datetime.now().timestamp())
+    tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
+    return int(datetime.now(tz).timestamp())
 
 
 class User(Base):
@@ -34,14 +37,16 @@ class User(Base):
 
     @property
     def bot_blocked_date(self):
+        tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
         return (
-            datetime.fromtimestamp(self._bot_blocked_date)
+            datetime.fromtimestamp(self._bot_blocked_date, tz)
             if self._bot_blocked_date
             else None
         )
 
     @bot_blocked_date.setter
     def bot_blocked_date(self, value):
+        tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
         self._bot_blocked_date = int(value.timestamp()) if value else None
 
 

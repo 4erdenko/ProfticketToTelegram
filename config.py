@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Show Update Service
     UPDATE_INTERVAL: int = 1800  # 30 минут
     ERROR_RETRY_INTERVAL: int = 60
-    MAX_DATA_AGE: int = 3600
+    MAX_DATA_AGE: int = 1800
     MAX_CONSECUTIVE_ERRORS: int = 3
     # Time settings
     DEFAULT_TIMEZONE: str = 'Europe/Moscow'

@@ -27,8 +27,7 @@ def get_current_month_year() -> tuple[int, int]:
     Returns:
         tuple: A tuple containing the current month and year.
     """
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    current_time = datetime.now(moscow_tz)
+    current_time = datetime.now(timezone)
     return current_time.month, current_time.year
 
 
@@ -39,8 +38,7 @@ def get_next_month_year() -> tuple[int, int]:
     Returns:
         tuple: A tuple containing the next month and year.
     """
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    next_time = datetime.now(moscow_tz) + relativedelta(months=+1)
+    next_time = datetime.now(timezone) + relativedelta(months=+1)
     return next_time.month, next_time.year
 
 
@@ -53,8 +51,7 @@ def get_three_months() -> tuple:
         tuple: A tuple containing three tuples,
         each with (month_number, month_name).
     """
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    current_time = datetime.now(moscow_tz)
+    current_time = datetime.now(timezone)
 
     months = []
     for i in range(3):
@@ -115,8 +112,7 @@ async def get_available_months(session: AsyncSession) -> list:
         list: List of tuples (month_number, month_name_ru, year)
         for months with data
     """
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    current_time = datetime.now(moscow_tz)
+    current_time = datetime.now(timezone)
 
     available_months = []
     for i in range(3):
@@ -168,7 +164,7 @@ async def check_data_freshness(session_pool: async_sessionmaker) -> bool:
                 logger.info(LEXICON_LOGS['NO_SHOW_DATA'])
                 return False
 
-            current_time = int(datetime.now(pytz.UTC).timestamp())
+            current_time = int(datetime.now(timezone).timestamp())
             time_diff = current_time - last_update
 
             is_fresh = time_diff < settings.UPDATE_INTERVAL
