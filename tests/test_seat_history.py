@@ -100,7 +100,6 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row.seats, 5)
 
     def test_calculate_average_sales_rate_for_show(self):
-        # Короткие интервалы (10 сек) — должны быть проигнорированы, результат None
         history_s1 = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
@@ -121,11 +120,10 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         ]
         rate = analytics.calculate_average_sales_rate_for_show(history_s2)
         # Медиана между 3/3600 и 2/3600
-        median_rate = (3/3600 + 2/3600) / 2
+        median_rate = (3 / 3600 + 2 / 3600) / 2
         self.assertAlmostEqual(rate, median_rate, places=7)
 
     def test_predict_sold_out(self):
-        # Короткие интервалы (10 сек) — должны быть проигнорированы, результат None
         history_s1 = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
@@ -134,7 +132,6 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         pred = analytics.predict_sold_out(history_s1)
         self.assertIsNone(pred)
 
-        # Интервалы в 1 час (но теперь требуется минимум 3 положительных net-rate за последние 24ч)
         history_s2 = [
             ShowSeatHistory(show_id='s2', timestamp=0, seats=10),
             ShowSeatHistory(show_id='s2', timestamp=1 * 3600, seats=7),
@@ -375,7 +372,6 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         # Нет валидных интервалов — результат пустой
         self.assertEqual(len(top_speed), 0)
 
-        # Теперь добавим интервалы в 1 час (но только 2 интервала — всё равно пусто)
         histories_data = [
             ShowSeatHistory(show_id='s1', timestamp=0, seats=10),
             ShowSeatHistory(
@@ -420,11 +416,9 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
             ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
-
             ShowSeatHistory(show_id='s2', timestamp=10, seats=20),
             ShowSeatHistory(show_id='s2', timestamp=20, seats=18),
             ShowSeatHistory(show_id='s2', timestamp=30, seats=17),
-
             ShowSeatHistory(show_id='s3', timestamp=10, seats=1),
             ShowSeatHistory(show_id='s3', timestamp=20, seats=0),
         ]
@@ -438,11 +432,9 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             ShowSeatHistory(show_id='s1', timestamp=0, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=1 * 3600, seats=7),
             ShowSeatHistory(show_id='s1', timestamp=2 * 3600, seats=5),
-
             ShowSeatHistory(show_id='s2', timestamp=0, seats=20),
             ShowSeatHistory(show_id='s2', timestamp=1 * 3600, seats=18),
             ShowSeatHistory(show_id='s2', timestamp=2 * 3600, seats=17),
-
             ShowSeatHistory(show_id='s3', timestamp=0, seats=1),
             ShowSeatHistory(show_id='s3', timestamp=1 * 3600, seats=0),
         ]

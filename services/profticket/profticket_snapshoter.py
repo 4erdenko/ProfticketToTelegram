@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 from aiogram import Bot
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,7 +63,11 @@ class ShowUpdateService:
 
             # Получаем текущие данные о местах
             current_shows = await session.execute(
-                select(Show).where(Show.month == month, Show.year == year, Show.is_deleted == False)
+                select(Show).where(
+                    Show.month == month,
+                    Show.year == year,
+                    ~Show.is_deleted,
+                )
             )
             current_shows_dict = {
                 show.id: show.seats for show in current_shows.scalars()
@@ -121,7 +125,7 @@ class ShowUpdateService:
                     Show.month == month,
                     Show.year == year,
                     Show.id.notin_(all_event_ids),
-                    Show.is_deleted == False
+                    ~Show.is_deleted,
                 )
                 .values(is_deleted=True)
             )

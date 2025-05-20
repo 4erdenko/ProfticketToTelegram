@@ -1,13 +1,12 @@
 import json
+import logging
+import re
+from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime
-from statistics import mean
 from typing import List, Optional, Sequence, Tuple
 
 import pytz
-import logging
-from calendar import monthrange
-import re
 
 from config import settings
 from telegram.db.models import Show, ShowSeatHistory
@@ -22,19 +21,30 @@ def filter_data_by_period(
 ) -> tuple[list[Show], dict[str, list[ShowSeatHistory]]]:
     if month is not None and year is not None:
         filtered_shows = [
-            s for s in shows if s.month == month and s.year == year and not getattr(s, 'is_deleted', False)
+            s
+            for s in shows
+            if s.month == month
+            and s.year == year
+            and not getattr(s, 'is_deleted', False)
         ]
         # Ограничиваем истории только этим месяцем
         start_dt = datetime(year, month, 1)
         end_dt = datetime(year, month, monthrange(year, month)[1], 23, 59, 59)
         filtered_ids = {s.id for s in filtered_shows}
         filtered_histories = [
-            h for h in histories if h.show_id in filtered_ids and start_dt.timestamp() <= h.timestamp <= end_dt.timestamp()
+            h
+            for h in histories
+            if h.show_id in filtered_ids
+            and start_dt.timestamp() <= h.timestamp <= end_dt.timestamp()
         ]
     else:
-        filtered_shows = [s for s in shows if not getattr(s, 'is_deleted', False)]
+        filtered_shows = [
+            s for s in shows if not getattr(s, 'is_deleted', False)
+        ]
         filtered_ids = {s.id for s in filtered_shows}
-        filtered_histories = [h for h in histories if h.show_id in filtered_ids]
+        filtered_histories = [
+            h for h in histories if h.show_id in filtered_ids
+        ]
     buckets = defaultdict(list)
     for h in filtered_histories:
         buckets[h.show_id].append(h)
@@ -46,11 +56,21 @@ def check_data_exists(shows, histories):
 
 
 MONTHS_RU = {
-    'января': 1, 'февраля': 2, 'марта': 3, 'апреля': 4, 'мая': 5, 'июня': 6,
-    'июля': 7, 'августа': 8, 'сентября': 9, 'октября': 10, 'ноября': 11, 'декабря': 12
+    'января': 1,
+    'февраля': 2,
+    'марта': 3,
+    'апреля': 4,
+    'мая': 5,
+    'июня': 6,
+    'июля': 7,
+    'августа': 8,
+    'сентября': 9,
+    'октября': 10,
+    'ноября': 11,
+    'декабря': 12,
 }
 
-# Парсер даты спектакля (ожидает формат 'YYYY-MM-DD HH:MM' или ISO)
+
 def parse_show_date(date_str: str) -> Optional[datetime]:
     try:
         return datetime.fromisoformat(date_str)
@@ -60,15 +80,24 @@ def parse_show_date(date_str: str) -> Optional[datetime]:
         except Exception:
             # Попробуем русский формат: 20 мая 2025, вт, 20:00
             try:
-                match = re.match(r'(\d{1,2}) (\w+) (\d{4}), [^,]+, (\d{2}):(\d{2})', date_str)
+                match = re.match(
+                    r'(\d{1,2}) (\w+) (\d{4}), [^,]+, (\d{2}):(\d{2})',
+                    date_str,
+                )
                 if match:
                     day, month_ru, year, hour, minute = match.groups()
                     month = MONTHS_RU.get(month_ru.lower())
                     if month:
-                        return datetime(int(year), month, int(day), int(hour), int(minute))
+                        return datetime(
+                            int(year), month, int(day), int(hour), int(minute)
+                        )
             except Exception as e:
-                logging.warning(f'parse_show_date: failed to parse "{date_str}": {e}')
-            logging.warning(f'parse_show_date: failed to parse "{date_str}" (all formats)')
+                logging.warning(
+                    f'parse_show_date: failed to parse "{date_str}": {e}'
+                )
+            logging.warning(
+                f'parse_show_date: failed to parse "{date_str}" (all formats)'
+            )
             return None
 
 
@@ -143,7 +172,9 @@ def predict_sold_out(history: Sequence[ShowSeatHistory]) -> Optional[int]:
         dt = curr.timestamp - prev.timestamp
         if dt < MIN_INTERVAL:
             continue
-        rate = (prev.seats - curr.seats) / dt  # net-rate (возвраты отрицательны)
+        rate = (
+            prev.seats - curr.seats
+        ) / dt  # net-rate (возвраты отрицательны)
         rates.append(rate)
 
     pos_rates = [r for r in rates if r > 0]
@@ -152,18 +183,26 @@ def predict_sold_out(history: Sequence[ShowSeatHistory]) -> Optional[int]:
 
     pos_rates.sort()
     m = len(pos_rates)
-    avg_rate = (pos_rates[m//2] if m % 2 else (pos_rates[m//2-1]+pos_rates[m//2])/2)
+    avg_rate = (
+        pos_rates[m // 2]
+        if m % 2
+        else (pos_rates[m // 2 - 1] + pos_rates[m // 2]) / 2
+    )
     if avg_rate <= 0:
         return None
 
     last = recs[-1]
     seconds_left = last.seats / avg_rate
-    if seconds_left > 365*24*3600:
+    if seconds_left > 365 * 24 * 3600:
         return None
 
     prediction = last.timestamp + int(seconds_left)
     # финальная проверка: sold-out раньше показа?
-    show_dt = parse_show_date(getattr(last, 'show', None).date if hasattr(last, 'show') and getattr(last, 'show', None) else None)
+    show_dt = parse_show_date(
+        getattr(last, 'show', None).date
+        if hasattr(last, 'show') and getattr(last, 'show', None)
+        else None
+    )
     if show_dt and prediction > show_dt.timestamp():
         return None
 
@@ -193,7 +232,7 @@ def top_shows_by_sales(
                 sales_data[group_key] = {
                     'name': show.show_name,
                     'total_sold': 0,
-                    'id': group_key
+                    'id': group_key,
                 }
             sales_data[group_key]['total_sold'] += net_sales
     ordered = sorted(sales_data.values(), key=lambda x: -x['total_sold'])
@@ -286,11 +325,7 @@ def calculate_average_sales_rate_for_show(
 
     records = sorted(history_for_show, key=lambda r: r.timestamp)
 
-    # Минимальный интервал времени между записями для учета в расчете (30 минут)
     MIN_INTERVAL_SECONDS = 30 * 60
-
-    # Максимально реалистичная скорость продаж (50 билетов/час)
-    MAX_REALISTIC_RATE = 50.0 / 3600
 
     rates = []
 
@@ -301,22 +336,19 @@ def calculate_average_sales_rate_for_show(
         # Учитываем только положительные продажи
         if dt <= 0 or ds <= 0:
             continue
-            
+
         # Игнорируем слишком короткие интервалы
         if dt < MIN_INTERVAL_SECONDS:
             continue
-            
+
         # Рассчитываем скорость продаж в этом интервале (билетов/секунду)
         rate = ds / dt
-        
-        # Ограничиваем максимальную скорость разумным значением
-        # rate = min(rate, MAX_REALISTIC_RATE)  # убираем ограничение, если нужно
-        
+
         rates.append(rate)
-    
+
     if not rates:
         return None
-        
+
     # Используем медиану вместо среднего для уменьшения влияния выбросов
     rates.sort()
     n = len(rates)
@@ -361,7 +393,9 @@ def top_shows_by_current_sales_speed(
         valid_rates.sort()
         n_rates = len(valid_rates)
         if n_rates % 2 == 0:
-            median = (valid_rates[n_rates // 2 - 1] + valid_rates[n_rates // 2]) / 2
+            median = (
+                valid_rates[n_rates // 2 - 1] + valid_rates[n_rates // 2]
+            ) / 2
         else:
             median = valid_rates[n_rates // 2]
         key = (show.show_name, show.id)
@@ -453,7 +487,7 @@ def top_shows_by_returns(
                 returns_data[group_key] = {
                     'name': show.show_name,
                     'total_returns': 0,
-                    'id': group_key
+                    'id': group_key,
                 }
             returns_data[group_key]['total_returns'] += returned
     ordered = sorted(returns_data.values(), key=lambda x: -x['total_returns'])

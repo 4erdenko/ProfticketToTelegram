@@ -1,23 +1,32 @@
+# Все импорты должны быть в начале файла
+import datetime
 import sys
 import types
-import datetime
+
+import pytest
 
 # --- PYTZ MOCK (глобально, до любых импортов) ---
 pytz = types.ModuleType('pytz')
+
+
 class MockTimezone(datetime.tzinfo):
     def localize(self, dt: datetime.datetime) -> datetime.datetime:
         return dt.replace(tzinfo=self)
+
     def utcoffset(self, dt):
         return datetime.timedelta(hours=3)  # Moscow offset
+
     def dst(self, dt):
         return datetime.timedelta(0)
+
+
 def mock_timezone(tz):
     return MockTimezone()
+
+
 pytz.timezone = mock_timezone
 sys.modules['pytz'] = pytz
 # --- END PYTZ MOCK ---
-
-import pytest
 
 
 @pytest.fixture(autouse=True)
