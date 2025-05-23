@@ -15,23 +15,35 @@ class AnalyticsUtilsTestCase(unittest.TestCase):
         self.shows = [
             Show(id='s1', show_name='Alpha', month=1, year=2024, actors='[]'),
             Show(id='s2', show_name='Beta', month=2, year=2024, actors='[]'),
+            Show(
+                id='s3',
+                show_name='Gamma',
+                month=1,
+                year=2024,
+                actors='[]',
+                is_deleted=True,
+            ),
         ]
         self.histories = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
             ShowSeatHistory(show_id='s1', timestamp=20, seats=8),
             ShowSeatHistory(show_id='s2', timestamp=10, seats=20),
             ShowSeatHistory(show_id='s2', timestamp=20, seats=15),
+            ShowSeatHistory(show_id='s3', timestamp=10, seats=5),
+            ShowSeatHistory(show_id='s3', timestamp=20, seats=0),
         ]
 
     def test_filter_data_by_period_all(self):
         filtered_shows, buckets = filter_data_by_period(
             self.shows, self.histories, None, None
         )
-        self.assertEqual(len(filtered_shows), 2)
+        self.assertEqual(len(filtered_shows), 3)
         self.assertIn('s1', buckets)
         self.assertIn('s2', buckets)
+        self.assertIn('s3', buckets)
         self.assertEqual(len(buckets['s1']), 2)
         self.assertEqual(len(buckets['s2']), 2)
+        self.assertEqual(len(buckets['s3']), 2)
 
     def test_filter_data_by_period_month(self):
         filtered_shows, buckets = filter_data_by_period(
@@ -42,6 +54,7 @@ class AnalyticsUtilsTestCase(unittest.TestCase):
         # Теперь bucket всегда содержит все истории для show_id
         self.assertIn('s1', buckets)
         self.assertEqual(len(buckets['s1']), 2)
+        self.assertNotIn('s3', buckets)
 
     def test_parse_show_date(self):
         dt = parse_show_date('2024-07-01 19:00')
