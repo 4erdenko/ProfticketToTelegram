@@ -57,6 +57,7 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_SALES_REPORT_TITLE': 'Топ спектаклей по продажам',
     'TOP_SHOWS_SPEED_REPORT_TITLE': 'Топ спектаклей по скорости продаж',
     'PREDICT_SELL_OUT_REPORT_TITLE': 'Прогноз sold out',
+    'PREDICT_SELL_OUT_LINE': '{index}. {name} ({show_date}) — ожидаемый sold out: {date}',
     'NO_DATA_FOR_REPORT': 'Нет данных для формирования отчета за указанный период.',
     'SALES_SPEED_UNIT_PER_DAY': 'бил./день',
     'SOLD_OUT_AT_TIMESTAMP': 'Продано полностью в: ', # Used with datetime

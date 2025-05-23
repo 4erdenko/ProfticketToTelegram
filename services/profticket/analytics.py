@@ -149,12 +149,18 @@ def get_net_sales_and_returns(hist):
 
 
 def predict_sold_out(
-    history: Sequence[ShowSeatHistory], show_dt: Optional[datetime] = None
+    history: Sequence[ShowSeatHistory],
+    show_dt: Optional[datetime] = None,
+    now_ts: Optional[int] = None,
 ) -> Optional[int]:
     if len(history) < 2:
         return None
 
     recs = sorted(history, key=lambda r: r.timestamp)
+
+    if now_ts is None:
+        tz = pytz.timezone(getattr(settings, "DEFAULT_TIMEZONE", "Europe/Moscow"))
+        now_ts = int(datetime.now(tz).timestamp())
 
     # --- Окно последних 24 часов ---
     WINDOW_HOURS = 24
@@ -196,6 +202,9 @@ def predict_sold_out(
     prediction = last.timestamp + int(seconds_left)
     # финальная проверка: sold-out раньше показа?
     if show_dt and prediction > show_dt.timestamp():
+        return None
+
+    if prediction <= now_ts:
         return None
 
     return prediction
@@ -405,7 +414,7 @@ def shows_predicted_to_sell_out_soonest(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
-) -> List[Tuple[str, int, str]]:
+) -> List[Tuple[str, int, str, str]]:
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year
     )
@@ -416,6 +425,7 @@ def shows_predicted_to_sell_out_soonest(
     except Exception:
         timezone = pytz.timezone('Europe/Moscow')
         now = datetime.now(timezone)
+    now_ts = int(now.timestamp())
     result = []
     for show in filtered_shows:
         show_dt = parse_show_date(show.date)
@@ -428,9 +438,9 @@ def shows_predicted_to_sell_out_soonest(
         h_rows = history_buckets.get(show.id, [])
         if len(h_rows) < 2:
             continue
-        prediction_ts = predict_sold_out(h_rows, show_dt)
-        if prediction_ts and prediction_ts > now.timestamp():
-            result.append((show.show_name, prediction_ts, show.id))
+        prediction_ts = predict_sold_out(h_rows, show_dt, now_ts)
+        if prediction_ts:
+            result.append((show.show_name, prediction_ts, show.id, show.date))
     result.sort(key=lambda x: x[1])
     return result[:n]
 
