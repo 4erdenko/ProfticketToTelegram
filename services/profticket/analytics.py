@@ -33,13 +33,9 @@ def filter_data_by_period(
         ]
 
     else:
-        filtered_shows = [
-            s for s in shows if not getattr(s, 'is_deleted', False)
-        ]
+        filtered_shows = list(shows)
         filtered_ids = {s.id for s in filtered_shows}
-        filtered_histories = [
-            h for h in histories if h.show_id in filtered_ids
-        ]
+        filtered_histories = [h for h in histories if h.show_id in filtered_ids]
     buckets = defaultdict(list)
     for h in filtered_histories:
         buckets[h.show_id].append(h)

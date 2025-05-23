@@ -205,6 +205,41 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(top_month1[0], ('Show Alpha', 5, 's1'))
         self.assertEqual(top_month1[1], ('Show Beta', 3, 's2'))
 
+    def test_top_shows_by_sales_includes_deleted_all_time(self):
+        shows_data = [
+            Show(
+                id='s1',
+                show_name='Show Alpha',
+                month=1,
+                year=2024,
+                actors='[]',
+                is_deleted=True,
+            ),
+            Show(
+                id='s2',
+                show_name='Show Beta',
+                month=1,
+                year=2024,
+                actors='[]',
+            ),
+        ]
+        histories_data = [
+            ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
+            ShowSeatHistory(show_id='s1', timestamp=20, seats=5),  # sold 5
+            ShowSeatHistory(show_id='s2', timestamp=10, seats=20),
+            ShowSeatHistory(show_id='s2', timestamp=20, seats=18),  # sold 2
+        ]
+
+        top_all_time = analytics.top_shows_by_sales(shows_data, histories_data, n=2)
+        self.assertEqual(top_all_time[0], ('Show Alpha', 5, 's1'))
+        self.assertEqual(top_all_time[1], ('Show Beta', 2, 's2'))
+
+        top_month = analytics.top_shows_by_sales(
+            shows_data, histories_data, month=1, year=2024, n=2
+        )
+        self.assertEqual(len(top_month), 1)
+        self.assertEqual(top_month[0], ('Show Beta', 2, 's2'))
+
     def test_top_artists_by_sales(self):
         shows = [
             Show(
