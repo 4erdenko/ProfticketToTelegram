@@ -440,3 +440,81 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         )
         # Нет ни одного прогноза, т.к. везде <3 интервала
         self.assertEqual(len(predictions), 0)
+
+    def test_predict_sold_out_future_and_past(self):
+        from datetime import datetime, timedelta
+        import pytz
+        from config import settings
+
+        tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
+        now = datetime.now(tz)
+
+        hist = [
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=3)).timestamp()),
+                seats=120,
+            ),
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=2)).timestamp()),
+                seats=100,
+            ),
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=1)).timestamp()),
+                seats=80,
+            ),
+            ShowSeatHistory(show_id='s1', timestamp=int(now.timestamp()), seats=60),
+        ]
+
+        show_dt = now + timedelta(hours=5)
+        future_pred = analytics.predict_sold_out(
+            hist, show_dt, now_ts=int(now.timestamp())
+        )
+        self.assertIsNotNone(future_pred)
+        self.assertGreater(future_pred, int(now.timestamp()))
+        self.assertLessEqual(future_pred, int(show_dt.timestamp()))
+
+        past_pred = analytics.predict_sold_out(
+            hist, show_dt, now_ts=future_pred
+        )
+        self.assertIsNone(past_pred)
+
+    def test_shows_predicted_to_sell_out_returns_show_date(self):
+        from datetime import datetime, timedelta
+        import pytz
+        from config import settings
+
+        tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
+        now = datetime.now(tz)
+        show_date = (now + timedelta(hours=4)).strftime('%Y-%m-%d %H:%M')
+
+        shows_data = [Show(id='s1', show_name='Alpha', actors='[]', date=show_date)]
+
+        histories = [
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=3)).timestamp()),
+                seats=100,
+            ),
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=2)).timestamp()),
+                seats=80,
+            ),
+            ShowSeatHistory(
+                show_id='s1',
+                timestamp=int((now - timedelta(hours=1)).timestamp()),
+                seats=60,
+            ),
+            ShowSeatHistory(show_id='s1', timestamp=int(now.timestamp()), seats=40),
+        ]
+
+        predictions = analytics.shows_predicted_to_sell_out_soonest(
+            shows_data, histories, n=1
+        )
+        self.assertEqual(len(predictions), 1)
+        name, pred_ts, _id, returned_date = predictions[0]
+        self.assertEqual(returned_date, show_date)
+        self.assertGreater(pred_ts, int(now.timestamp()))

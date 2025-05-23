@@ -312,9 +312,13 @@ async def cmd_generate_soldout_report(
         return
 
     response_lines = [f'{report_title}{period_text}:']
-    for i, (name, ts, _id) in enumerate(results, 1):
+    for i, (name, ts, _id, show_date) in enumerate(results, 1):
         date_str = format_timestamp_to_date(ts, include_year=True)
-        response_lines.append(f'{i}. {name} — ожидаемый sold out: {date_str}')
+        response_lines.append(
+            LEXICON_RU['PREDICT_SELL_OUT_LINE'].format(
+                index=i, name=name, show_date=show_date, date=date_str
+            )
+        )
     await message.answer('\n'.join(response_lines))
 
 
