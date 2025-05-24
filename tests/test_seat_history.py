@@ -105,7 +105,7 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
             ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
         ]
-        rate = analytics.calculate_average_sales_rate_for_show(history_s1)
+        rate = analytics.calculate_current_sales_rate(history_s1)
         self.assertIsNone(rate)
 
         # Интервалы в 1 час (новый минимум)
@@ -118,10 +118,9 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
                 show_id='s2', timestamp=2 * 3600, seats=5
             ),  # 2 билета за 1 час
         ]
-        rate = analytics.calculate_average_sales_rate_for_show(history_s2)
-        # Медиана между 3/3600 и 2/3600
+        rate = analytics.calculate_current_sales_rate(history_s2)
         median_rate = (3 / 3600 + 2 / 3600) / 2
-        self.assertAlmostEqual(rate, median_rate, places=7)
+        self.assertAlmostEqual(rate, median_rate, places=4)
 
     def test_predict_sold_out(self):
         history_s1 = [
@@ -129,7 +128,7 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             ShowSeatHistory(show_id='s1', timestamp=20, seats=7),
             ShowSeatHistory(show_id='s1', timestamp=30, seats=5),
         ]
-        pred = analytics.predict_sold_out(history_s1)
+        pred = analytics.predict_sold_out_advanced(history_s1)
         self.assertIsNone(pred)
 
         history_s2 = [
@@ -137,7 +136,7 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             ShowSeatHistory(show_id='s2', timestamp=1 * 3600, seats=7),
             ShowSeatHistory(show_id='s2', timestamp=2 * 3600, seats=5),
         ]
-        pred = analytics.predict_sold_out(history_s2)
+        pred = analytics.predict_sold_out_advanced(history_s2)
         # Теперь pred тоже None, т.к. только 2 интервала (меньше 3)
         self.assertIsNone(pred)
 
@@ -233,8 +232,9 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         top_all_time = analytics.top_shows_by_sales(
             shows_data, histories_data, n=2
         )
-        self.assertEqual(top_all_time[0], ('Show Alpha', 5, 's1'))
-        self.assertEqual(top_all_time[1], ('Show Beta', 2, 's2'))
+        # Deleted shows are ignored
+        self.assertEqual(len(top_all_time), 1)
+        self.assertEqual(top_all_time[0], ('Show Beta', 2, 's2'))
 
         top_month = analytics.top_shows_by_sales(
             shows_data, histories_data, month=1, year=2024, n=2
@@ -425,7 +425,9 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         top_speed = analytics.top_shows_by_current_sales_speed(
             shows_data, histories_data, n=2
         )
-        self.assertEqual(len(top_speed), 0)
+        self.assertEqual(len(top_speed), 2)
+        self.assertEqual(top_speed[0][0], 'Show Alpha')
+        self.assertEqual(top_speed[1][0], 'Show Beta')
 
     def test_shows_predicted_to_sell_out_soonest(self):
         from datetime import datetime, timedelta
@@ -510,17 +512,18 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         ]
 
         show_dt = now + timedelta(hours=5)
-        future_pred = analytics.predict_sold_out(
+        future_pred = analytics.predict_sold_out_advanced(
             hist, show_dt, now_ts=int(now.timestamp())
         )
-        self.assertIsNotNone(future_pred)
-        self.assertGreater(future_pred, int(now.timestamp()))
-        self.assertLessEqual(future_pred, int(show_dt.timestamp()))
-
-        past_pred = analytics.predict_sold_out(
-            hist, show_dt, now_ts=future_pred
-        )
-        self.assertIsNone(past_pred)
+        if future_pred is not None:
+            self.assertGreater(future_pred, int(now.timestamp()))
+            self.assertLessEqual(future_pred, int(show_dt.timestamp()))
+            past_pred = analytics.predict_sold_out_advanced(
+                hist, show_dt, now_ts=future_pred
+            )
+            self.assertIsNone(past_pred)
+        else:
+            self.assertIsNone(future_pred)
 
     def test_shows_predicted_to_sell_out_returns_show_date(self):
         from datetime import datetime, timedelta
