@@ -331,7 +331,7 @@ async def cmd_generate_top_report_month(
                 ) + track
             )
     if len(response_lines) > 1:
-        await message.answer('\n'.join(response_lines))
+        await message.answer('\n\n'.join(response_lines))
     else:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
 
@@ -402,7 +402,7 @@ async def cmd_generate_soldout_report(
                 index=i, name=name, show_date=show_date, date=date_str
             )
         )
-    await message.answer('\n'.join(response_lines))
+    await message.answer('\n\n'.join(response_lines))
 
 
 # Функция для форматирования timestamp в читаемую дату

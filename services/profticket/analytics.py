@@ -173,10 +173,6 @@ def predict_sold_out(
         )
         now_ts = int(datetime.now(tz).timestamp())
 
-    # --- Окно последних 24 часов ---
-    WINDOW_HOURS = 24
-    window_start = recs[-1].timestamp - WINDOW_HOURS * 3600
-    recs = [r for r in recs if r.timestamp >= window_start]
     if len(recs) < 3:
         return None
 
