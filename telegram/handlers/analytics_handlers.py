@@ -218,35 +218,80 @@ async def cmd_generate_top_report_month(
     if not results:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
         return
-    response_lines = [f'{report_title}{period_text}:']
+    response_lines = [f'<b>{report_title}{period_text}:</b>']
+
+    event_to_group = {s.id: getattr(s, 'show_id', None) or s.id for s in all_shows}
+    first_seen: dict[str, int] = {}
+    for h in all_histories:
+        gkey = event_to_group.get(h.show_id)
+        if not gkey:
+            continue
+        ts = first_seen.get(gkey)
+        first_seen[gkey] = h.timestamp if ts is None or h.timestamp < ts else ts
 
     # Форматирование результата в зависимости от типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
         for i, (name, sold, _id) in enumerate(results, 1):
-            response_lines.append(f'{i}. {name} — продано: {sold} бил.')
+            track = ''
+            if month is None and year is None:
+                ts = first_seen.get(_id)
+                if ts:
+                    date_str = format_timestamp_to_date(ts, include_year=True)
+                    track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
+            response_lines.append(
+                LEXICON_RU['TOP_SHOWS_SALES_LINE'].format(
+                    index=i, name=name, sold=sold, tracking=track
+                )
+            )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_artists_sales']:
         for i, (artist, sold) in enumerate(results, 1):
             response_lines.append(
-                f'{i}. {artist} — уч. в продажах: {sold} бил.'
+                LEXICON_RU['TOP_ARTISTS_SALES_LINE'].format(
+                    index=i, name=artist, sold=sold
+                )
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
         for i, (name, rate_sec, _id) in enumerate(results, 1):
             rate_day = rate_sec * 60 * 60 * 24
             response_lines.append(
-                f'{i}. {name} — ~{rate_day:.1f} '
-                f"{LEXICON_RU['SALES_SPEED_UNIT_PER_DAY']}"
+                LEXICON_RU['TOP_SHOWS_SPEED_LINE'].format(
+                    index=i,
+                    name=name,
+                    speed=rate_day,
+                    unit=LEXICON_RU['SALES_SPEED_UNIT_PER_DAY'],
+                )
             )
     # Добавляем форматирование для новых отчётов
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_returns']:
         for i, (name, returns, _id) in enumerate(results, 1):
-            response_lines.append(f'{i}. {name} — возвратов: {returns} бил.')
+            track = ''
+            if month is None and year is None:
+                ts = first_seen.get(_id)
+                if ts:
+                    date_str = format_timestamp_to_date(ts, include_year=True)
+                    track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
+            response_lines.append(
+                LEXICON_RU['TOP_SHOWS_RETURNS_LINE'].format(
+                    index=i, name=name, returns=returns
+                ) + track
+            )
     elif (
         report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_return_rate']
     ):
         for i, (name, rate, _id) in enumerate(results, 1):
             # Форматируем процент с одним знаком после запятой
             percent = rate * 100
-            response_lines.append(f'{i}. {name} — возвратов: {percent:.1f}%')
+            track = ''
+            if month is None and year is None:
+                ts = first_seen.get(_id)
+                if ts:
+                    date_str = format_timestamp_to_date(ts, include_year=True)
+                    track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
+            response_lines.append(
+                LEXICON_RU['TOP_SHOWS_RETURN_RATE_LINE'].format(
+                    index=i, name=name, percent=percent
+                ) + track
+            )
     if len(response_lines) > 1:
         await message.answer('\n'.join(response_lines))
     else:
