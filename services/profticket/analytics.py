@@ -35,7 +35,9 @@ def filter_data_by_period(
     else:
         filtered_shows = list(shows)
         filtered_ids = {s.id for s in filtered_shows}
-        filtered_histories = [h for h in histories if h.show_id in filtered_ids]
+        filtered_histories = [
+            h for h in histories if h.show_id in filtered_ids
+        ]
     buckets = defaultdict(list)
     for h in filtered_histories:
         buckets[h.show_id].append(h)
@@ -155,7 +157,9 @@ def predict_sold_out(
     recs = sorted(history, key=lambda r: r.timestamp)
 
     if now_ts is None:
-        tz = pytz.timezone(getattr(settings, "DEFAULT_TIMEZONE", "Europe/Moscow"))
+        tz = pytz.timezone(
+            getattr(settings, "DEFAULT_TIMEZONE", "Europe/Moscow")
+        )
         now_ts = int(datetime.now(tz).timestamp())
 
     # --- Окно последних 24 часов ---
