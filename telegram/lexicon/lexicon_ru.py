@@ -67,6 +67,22 @@ LEXICON_RU: dict[str, str] = {
     # Добавляем константы для новых отчётов
     'TOP_SHOWS_RETURNS_REPORT_TITLE': 'Топ спектаклей по возвратам билетов',
     'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': 'Топ спектаклей по проценту возвратов',
+    'TOP_SHOWS_SALES_LINE': (
+        '{index}. {name} - продано {sold} бил.{tracking}'
+    ),
+    'TOP_ARTISTS_SALES_LINE': (
+        '{index}. {name} - уч. в продажах {sold} бил.'
+    ),
+    'TOP_SHOWS_SPEED_LINE': (
+        '{index}. {name} - ~{speed:.1f} {unit}'
+    ),
+    'TOP_SHOWS_RETURNS_LINE': (
+        '{index}. {name} - возвратов {returns} бил.'
+    ),
+    'TOP_SHOWS_RETURN_RATE_LINE': (
+        '{index}. {name} - возвратов {percent:.1f}%'
+    ),
+    'TRACKING_SINCE': ' с {date}',
 }
 
 LEXICON_COMMANDS_RU: dict[str, str] = {
