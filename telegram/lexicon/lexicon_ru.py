@@ -55,6 +55,7 @@ LEXICON_RU: dict[str, str] = {
     'ANALYTICS_MENU_TITLE': '📊 Меню аналитики',
     'CHOOSE_REPORT_PERIOD': '📅 Выберите период для отчета:',
     'TOP_SHOWS_SALES_REPORT_TITLE': 'Топ спектаклей по продажам',
+    'TOP_SHOWS_SALES_FORMAT_EXPLANATION': '(валовые / чистые продажи)',
     'TOP_SHOWS_SPEED_REPORT_TITLE': 'Топ спектаклей по скорости продаж',
     'PREDICT_SELL_OUT_REPORT_TITLE': 'Прогноз sold out',
     'PREDICT_SELL_OUT_LINE': (
@@ -72,7 +73,7 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': 'Топ спектаклей по проценту возвратов',
     'TOP_SHOWS_SALES_LINE': (
         '{index}. <b>{name}</b>\n'
-        '   \U0001F39F Продано: <b>{sold}</b> бил.{tracking}'
+        '   \U0001F39F Продано: <b>{gross}</b> / <b>{net}</b> бил.{tracking}'
     ),
     'TOP_ARTISTS_SALES_LINE': (
         '{index}. <b>{name}</b>\n'

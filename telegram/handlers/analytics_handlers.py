@@ -42,7 +42,7 @@ class AnalyticsStates(StatesGroup):
 # REPORTS объединённый
 REPORTS = {
     LEXICON_BUTTONS_RU['/report_top_shows_sales']: {
-        'handler': analytics.top_shows_by_sales,
+        'handler': analytics.top_shows_by_sales_detailed,
         'title': LEXICON_RU['TOP_SHOWS_SALES_REPORT_TITLE'],
     },
     LEXICON_BUTTONS_RU['/report_top_shows_speed']: {
@@ -222,6 +222,10 @@ async def cmd_generate_top_report_month(
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
         return
     response_lines = [f'<b>{report_title}{period_text}:</b>']
+    
+    # Добавляем пояснение формата для отчета продаж
+    if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
+        response_lines.append(f'<i>{LEXICON_RU["TOP_SHOWS_SALES_FORMAT_EXPLANATION"]}</i>')
 
     event_to_group = {
         s.id: getattr(s, 'show_id', None) or s.id for s in all_shows
@@ -263,7 +267,7 @@ async def cmd_generate_top_report_month(
 
     # Форматирование результата в зависимости от типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
-        for i, (name, sold, _id) in enumerate(results, 1):
+        for i, (name, gross, net, _id) in enumerate(results, 1):
             track = ''
             if month is None and year is None:
                 ts = first_seen.get(_id)
@@ -272,7 +276,7 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_SALES_LINE'].format(
-                    index=i, name=name, sold=sold, tracking=track
+                    index=i, name=name, gross=gross, net=net, tracking=track
                 )
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_artists_sales']:
