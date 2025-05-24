@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime
 
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from services.profticket import analytics
+from services.profticket.analytics import TITLES_TO_SKIP
 from telegram.db.models import Show, ShowSeatHistory
 from telegram.keyboards.analytics_keyboard import (
     RUS_TO_MONTH, analytics_main_menu_keyboard, analytics_months_keyboard,
@@ -234,6 +236,31 @@ async def cmd_generate_top_report_month(
             h.timestamp if ts is None or h.timestamp < ts else ts
         )
 
+    artist_first_seen: dict[str, int] = {}
+    if month is None and year is None:
+        titles_to_skip = TITLES_TO_SKIP
+        for show in all_shows:
+            gkey = getattr(show, 'show_id', None) or show.id
+            ts = first_seen.get(gkey)
+            if ts is None:
+                continue
+            try:
+                actors_list = json.loads(show.actors) if show.actors else []
+                if not isinstance(actors_list, list):
+                    actors_list = []
+            except json.JSONDecodeError:
+                actors_list = []
+            for actor in actors_list:
+                if not isinstance(actor, str) or not actor.strip():
+                    continue
+                name = actor.strip()
+                lower = name.lower()
+                if any(title in lower for title in titles_to_skip):
+                    continue
+                prev = artist_first_seen.get(name)
+                if prev is None or ts < prev:
+                    artist_first_seen[name] = ts
+
     # Форматирование результата в зависимости от типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
         for i, (name, sold, _id) in enumerate(results, 1):
@@ -250,10 +277,16 @@ async def cmd_generate_top_report_month(
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_artists_sales']:
         for i, (artist, sold) in enumerate(results, 1):
+            track = ''
+            if month is None and year is None:
+                ts = artist_first_seen.get(artist)
+                if ts:
+                    date_str = format_timestamp_to_date(ts, include_year=True)
+                    track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_ARTISTS_SALES_LINE'].format(
                     index=i, name=artist, sold=sold
-                )
+                ) + track
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
         for i, (name, rate_sec, _id) in enumerate(results, 1):

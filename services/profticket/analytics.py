@@ -10,6 +10,17 @@ import pytz
 from config import settings
 from telegram.db.models import Show, ShowSeatHistory
 
+# Common list of titles and awards to ignore when processing actors
+TITLES_TO_SKIP = [
+    'народный артист россии',
+    'народная артистка россии',
+    'заслуженный артист россии',
+    'заслуженная артистка россии',
+    'лауреат государственных премий',
+    'заслуженный деятель искусств',
+    'лауреат премии',
+]
+
 
 # Универсальная фильтрация по периоду и формирование buckets
 def filter_data_by_period(
@@ -264,15 +275,7 @@ def top_artists_by_sales(
             show_total_sales[show.id] = net
 
     # Список титулов, которые нужно пропустить или объединить
-    titles_to_merge = [
-        'народный артист россии',
-        'народная артистка россии',
-        'заслуженный артист россии',
-        'заслуженная артистка россии',
-        'лауреат государственных премий',
-        'заслуженный деятель искусств',
-        'лауреат премии',
-    ]
+    titles_to_merge = TITLES_TO_SKIP
 
     artist_aggregated_sales = defaultdict(int)
 

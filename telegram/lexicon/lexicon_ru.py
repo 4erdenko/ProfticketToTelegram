@@ -68,10 +68,10 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_RETURNS_REPORT_TITLE': 'Топ спектаклей по возвратам билетов',
     'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': 'Топ спектаклей по проценту возвратов',
     'TOP_SHOWS_SALES_LINE': (
-        '{index}. <b>{name}</b> - продано <b>{sold}</b>{tracking}'
+        '{index}. <b>{name}</b> - продано <b>{sold}</b> бил.{tracking}'
     ),
     'TOP_ARTISTS_SALES_LINE': (
-        '{index}. \U0001F464 <b>{name}</b> — уч. в продажах: <b>{sold}</b> бил.'
+        '{index}. <b>{name}</b> — уч. в продажах: <b>{sold}</b> бил.'
     ),
     'TOP_SHOWS_SPEED_LINE': (
         '{index}. <b>{name}</b> - ~{speed:.1f} {unit}'
