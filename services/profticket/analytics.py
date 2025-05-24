@@ -5,29 +5,40 @@ Analytics module for ProfTicket data
 
 ### Где показывать оба числа (gross / net):
 
-1. **Топ спектаклей по продажам** - классический кейс «208 / 194» (gross выдано / net чистые):
-   top_shows_by_sales_detailed(shows, histories)  # Возвращает (name, gross, net, id)
-   top_shows_by_sales(shows, histories)  # Обратная совместимость - только gross
+1. **Топ спектаклей по продажам** - классический кейс «208 / 194»
+(gross выдано / net чистые):
+   top_shows_by_sales_detailed(shows, histories)  # Возвращает
+   (name, gross, net, id)
+   top_shows_by_sales(shows, histories)
+   # Обратная совместимость - только gross
 
-2. **Календарный pace-дашборд** - кривая спроса строится по gross, рядом идёт net и отдельная строчка «refunds»:
+2. **Календарный pace-дашборд** - кривая спроса строится по gross, рядом
+идёт net и отдельная строчка «refunds»:
    calendar_pace_dashboard(shows, histories, month=5, year=2024)
-   # Возвращает: {'gross_sales': [...], 'net_sales': [...], 'refunds': [...], ...}
+   # Возвращает: {'gross_sales': [...], 'net_sales': [...],
+   'refunds': [...], ...}
 
-3. **Финансовые сводки по конкретным шоу** - отчёт в бухгалтерию и royalty видит net, маркетинг смотрит gross:
+3. **Финансовые сводки по конкретным шоу** - отчёт в бухгалтерию и royalty
+видит net, маркетинг смотрит gross:
    show_financial_summary(show_id, shows, histories)
-   # Возвращает: {'gross_sales': 208, 'net_sales': 194, 'total_refunds': 14, ...}
+   # Возвращает: {'gross_sales': 208, 'net_sales': 194,
+   'total_refunds': 14, ...}
 
 ### Где обычно достаточно одного значения:
 
 - **Топ артистов** - берут net (чистые билеты, уже без возвратов)
 - **Возвраты и return-rate** - само собой показывают только возвраты/процент
-- **Заполняемость (occupancy) и прогноз sold-out** - считают по net-остатку мест
-- **Скорость текущих продаж** - используют gross-транзакции, но выводят одну цифру «билетов/час»
+- **Заполняемость (occupancy) и прогноз sold-out** -
+считают по net-остатку мест
+- **Скорость текущих продаж** - используют gross-транзакции,
+но выводят одну цифру «билетов/час»
 
 ### API совместимость:
 
-- Все существующие функции сохранили свою сигнатуру для обратной совместимости
-- Новые функции с gross/net имеют суффикс `_detailed` или являются отдельными функциями
+- Все существующие функции сохранили свою сигнатуру
+для обратной совместимости
+- Новые функции с gross/net имеют суффикс `_detailed`
+или являются отдельными функциями
 """
 
 import json
@@ -35,7 +46,7 @@ import logging
 import re
 from collections import defaultdict
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import pytz
@@ -79,18 +90,17 @@ def filter_data_by_period(
 ) -> tuple[list[Show], dict[str, list[ShowSeatHistory]]]:
     """
     Универсальная фильтрация по периоду и формирование buckets
-    
+
     Args:
-        include_past_shows: если True, включает прошедшие (is_deleted=True) спектакли.
-                           Полезно для анализа скорости продаж и исторических данных.
+        include_past_shows: если True, включает прошедшие
+        (is_deleted=True) спектакли.
+        Полезно для анализа скорости продаж и исторических данных.
     """
     if month is not None and year is not None:
         if include_past_shows:
             # Включаем все спектакли, даже прошедшие
             filtered_shows = [
-                s
-                for s in shows
-                if s.month == month and s.year == year
+                s for s in shows if s.month == month and s.year == year
             ]
         else:
             # Стандартная логика - исключаем прошедшие
@@ -177,7 +187,7 @@ def top_shows_by_sales(
 
     # Сортируем по gross продажам
     ordered = sorted(sales_data.values(), key=lambda x: -x['total_sold'])
-    
+
     # Возвращаем только gross продажи для обратной совместимости
     return [
         (item['name'], item['total_sold'], item['id']) for item in ordered[:n]
@@ -190,8 +200,8 @@ def calculate_current_sales_rate(
     """
     Расчёт текущей скорости продаж с учётом последних N часов
     и взвешиванием по времени (более свежие данные важнее)
-    
-    Использует gross транзакции (все изменения мест), но считает 
+
+    Использует gross транзакции (все изменения мест), но считает
     net скорость изменения (учитывает и продажи, и возвраты).
     Результат: билетов/секунду (можно умножить на 3600 для билетов/час).
     """
@@ -239,17 +249,23 @@ def top_shows_by_current_sales_speed(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
-    include_past_shows: bool = True,  # По умолчанию включаем для анализа скорости
+    include_past_shows: bool = True,
 ) -> List[Tuple[str, float, str]]:
     """
     Топ шоу по текущей скорости продаж
-    
-    Показывает одну цифру «билетов/секунду» на основе net скорости 
+
+    Показывает одну цифру «билетов/секунду» на основе net скорости
     изменения количества мест (gross активность, net результат).
-    
+
     Args:
         include_past_shows: если True, включает прошедшие спектакли в анализ.
-                           Полезно для понимания исторических паттернов скорости продаж.
+        Полезно для понимания исторических паттернов скорости продаж.
+        :param shows:
+        :param histories:
+        :param month:
+        :param include_past_shows:
+        :param n:
+        :param year:
     """
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year, include_past_shows=include_past_shows
@@ -316,7 +332,6 @@ def predict_sold_out_advanced(
 
         # Используем полином 2-й степени
         coeffs = np.polyfit(t_normalized, seats, 2)
-        poly = np.poly1d(coeffs)
 
         # Предсказываем, когда seats = 0
         # Решаем квадратное уравнение ax² + bx + c = 0
@@ -603,22 +618,25 @@ def calendar_pace_dashboard(
     """
     Календарный pace-дашборд с разделением gross/net/refunds
     Возвращает данные для построения кривых спроса
-    
+
     Args:
-        n: параметр для совместимости API (не используется, т.к. возвращаем данные по дням)
+        n: параметр для совместимости API
+        (не используется, т.к. возвращаем данные по дням)
     """
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year
     )
 
     # Группируем по датам шоу
-    date_groups = defaultdict(lambda: {
-        'shows': [],
-        'total_gross': 0,
-        'total_net': 0,
-        'total_refunds': 0,
-        'histories': []
-    })
+    date_groups = defaultdict(
+        lambda: {
+            'shows': [],
+            'total_gross': 0,
+            'total_net': 0,
+            'total_refunds': 0,
+            'histories': [],
+        }
+    )
 
     for show in filtered_shows:
         h_rows = history_buckets.get(show.id, [])
@@ -631,13 +649,15 @@ def calendar_pace_dashboard(
         show_date = show.date
         date_groups[show_date]['shows'].append(show.show_name)
         date_groups[show_date]['total_gross'] += sold  # Gross = все продажи
-        date_groups[show_date]['total_net'] += net_sales_amount  # Net = продажи - возвраты
+        date_groups[show_date][
+            'total_net'
+        ] += net_sales_amount  # Net = продажи - возвраты
         date_groups[show_date]['total_refunds'] += returned
         date_groups[show_date]['histories'].extend(h_rows)
 
     # Сортируем по дате
     sorted_dates = sorted(date_groups.items())
-    
+
     # Валидация: если нет данных, возвращаем пустую структуру
     if not sorted_dates:
         return {
@@ -645,15 +665,15 @@ def calendar_pace_dashboard(
             'gross_sales': [],
             'net_sales': [],
             'refunds': [],
-            'show_names': []
+            'show_names': [],
         }
-    
+
     result = {
         'dates': [],
         'gross_sales': [],
         'net_sales': [],
         'refunds': [],
-        'show_names': []
+        'show_names': [],
     }
 
     for date, data in sorted_dates:
@@ -675,14 +695,16 @@ def show_financial_summary(
     """
     Финансовая сводка по конкретному шоу
     Показывает gross/net для бухгалтерии и маркетинга
-    
+
     Args:
-        n: параметр для совместимости API (не используется для сводки конкретного шоу)
+        n: параметр для совместимости API
+        (не используется для сводки конкретного шоу)
     """
     # Находим все шоу с данным show_id (исключая удаленные)
     target_shows = [
-        s for s in shows 
-        if (getattr(s, 'show_id', None) or s.id) == show_id 
+        s
+        for s in shows
+        if (getattr(s, 'show_id', None) or s.id) == show_id
         and not getattr(s, 'is_deleted', False)
     ]
     if not target_shows:
@@ -716,21 +738,25 @@ def show_financial_summary(
 
     # Рассчитываем дополнительную аналитику
     refund_rate = total_refunds / total_gross
-    
+
     # Текущая скорость продаж
     current_sales_rate = None
     if all_histories:
-        current_sales_rate = calculate_current_sales_rate(all_histories, lookback_hours=24)
+        current_sales_rate = calculate_current_sales_rate(
+            all_histories, lookback_hours=24
+        )
 
     return {
         'show_id': show_id,
         'show_names': list(show_names),
         'show_dates': show_dates,
         'gross_sales': total_gross,  # для маркетинга
-        'net_sales': total_net,      # для бухгалтерии и royalty
+        'net_sales': total_net,  # для бухгалтерии и royalty
         'total_refunds': total_refunds,
         'refund_rate': round(refund_rate * 100, 2),  # в процентах
-        'current_sales_rate_per_hour': round(current_sales_rate * 3600, 2) if current_sales_rate else None,
+        'current_sales_rate_per_hour': round(current_sales_rate * 3600, 2)
+        if current_sales_rate
+        else None,
         'total_performances': len(target_shows),
     }
 
@@ -771,13 +797,13 @@ def top_shows_by_sales_detailed(
 
     # Сортируем по gross продажам
     ordered = sorted(sales_data.values(), key=lambda x: -x['total_sold'])
-    
+
     return [
         (
-            item['name'], 
+            item['name'],
             item['total_sold'],  # gross
             item['total_sold'] - item['total_returned'],  # net
-            item['id']
-        ) 
+            item['id'],
+        )
         for item in ordered[:n]
     ]
