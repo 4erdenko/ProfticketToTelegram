@@ -57,7 +57,10 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_SALES_REPORT_TITLE': 'Топ спектаклей по продажам',
     'TOP_SHOWS_SPEED_REPORT_TITLE': 'Топ спектаклей по скорости продаж',
     'PREDICT_SELL_OUT_REPORT_TITLE': 'Прогноз sold out',
-    'PREDICT_SELL_OUT_LINE': '{index}. {name} ({show_date}) — ожидаемый sold out: {date}',
+    'PREDICT_SELL_OUT_LINE': (
+        '{index}. <b>{name}</b> ({show_date})\n'
+        '   \u23F3 Ожидаемый sold out: {date}'
+    ),
     'NO_DATA_FOR_REPORT': 'Нет данных для формирования отчета за указанный период.',
     'SALES_SPEED_UNIT_PER_DAY': 'бил./день',
     'SOLD_OUT_AT_TIMESTAMP': 'Продано полностью в: ', # Used with datetime
@@ -68,19 +71,24 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_RETURNS_REPORT_TITLE': 'Топ спектаклей по возвратам билетов',
     'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': 'Топ спектаклей по проценту возвратов',
     'TOP_SHOWS_SALES_LINE': (
-        '{index}. <b>{name}</b> - продано <b>{sold}</b> бил.{tracking}'
+        '{index}. <b>{name}</b>\n'
+        '   \U0001F39F Продано: <b>{sold}</b> бил.{tracking}'
     ),
     'TOP_ARTISTS_SALES_LINE': (
-        '{index}. <b>{name}</b> — уч. в продажах: <b>{sold}</b> бил.'
+        '{index}. <b>{name}</b>\n'
+        '   \U0001F39F Продаж: <b>{sold}</b> бил.'
     ),
     'TOP_SHOWS_SPEED_LINE': (
-        '{index}. <b>{name}</b> - ~{speed:.1f} {unit}'
+        '{index}. <b>{name}</b>\n'
+        '   \u26A1\ufe0f Скорость: <b>{speed:.1f} {unit}</b>'
     ),
     'TOP_SHOWS_RETURNS_LINE': (
-        '{index}. <b>{name}</b> - возвратов <b>{returns}</b>'
+        '{index}. <b>{name}</b>\n'
+        '   \u21A9\ufe0f Возвратов: <b>{returns}</b>'
     ),
     'TOP_SHOWS_RETURN_RATE_LINE': (
-        '{index}. <b>{name}</b> - возвратов <b>{percent:.1f}%</b>'
+        '{index}. <b>{name}</b>\n'
+        '   \u21A9\ufe0f Возвратов: <b>{percent:.1f}%</b>'
     ),
     'TRACKING_SINCE': ' с {date}г.',
 }
