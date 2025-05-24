@@ -220,16 +220,14 @@ async def cmd_generate_top_report_month(
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
 
-    # Логика вызова аналитических функций с правильной обработкой прошедших спектаклей
     if month is None and year is None:
-        # За всё время - включаем ВСЕ спектакли, включая прошедшие
         results = analytics_func(
             shows=all_shows,
             histories=all_histories,
             month=month,
             year=year,
             n=10,
-            include_past_shows=True,  # Включаем прошедшие для полной статистики за всё время
+            include_past_shows=True,
         )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
         # Скорость продаж - всегда включаем прошедшие для анализа
@@ -239,7 +237,7 @@ async def cmd_generate_top_report_month(
             month=month,
             year=year,
             n=10,
-            include_past_shows=True,  # Включаем прошедшие для анализа скорости
+            include_past_shows=True,
         )
     else:
         # Конкретный период - только активные спектакли
