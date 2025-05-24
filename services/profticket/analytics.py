@@ -75,22 +75,45 @@ def filter_data_by_period(
     histories: Sequence[ShowSeatHistory],
     month: Optional[int],
     year: Optional[int],
+    include_past_shows: bool = False,
 ) -> tuple[list[Show], dict[str, list[ShowSeatHistory]]]:
-    """Универсальная фильтрация по периоду и формирование buckets"""
+    """
+    Универсальная фильтрация по периоду и формирование buckets
+    
+    Args:
+        include_past_shows: если True, включает прошедшие (is_deleted=True) спектакли.
+                           Полезно для анализа скорости продаж и исторических данных.
+    """
     if month is not None and year is not None:
-        filtered_shows = [
-            s
-            for s in shows
-            if s.month == month
-            and s.year == year
-            and not getattr(s, 'is_deleted', False)
-        ]
+        if include_past_shows:
+            # Включаем все спектакли, даже прошедшие
+            filtered_shows = [
+                s
+                for s in shows
+                if s.month == month and s.year == year
+            ]
+        else:
+            # Стандартная логика - исключаем прошедшие
+            filtered_shows = [
+                s
+                for s in shows
+                if s.month == month
+                and s.year == year
+                and not getattr(s, 'is_deleted', False)
+            ]
         filtered_ids = {s.id for s in filtered_shows}
         filtered_histories = [
             h for h in histories if h.show_id in filtered_ids
         ]
     else:
-        filtered_shows = list(shows)
+        if include_past_shows:
+            # За все время - включаем все спектакли
+            filtered_shows = list(shows)
+        else:
+            # За все время - исключаем прошедшие
+            filtered_shows = [
+                s for s in shows if not getattr(s, 'is_deleted', False)
+            ]
         filtered_ids = {s.id for s in filtered_shows}
         filtered_histories = [
             h for h in histories if h.show_id in filtered_ids
@@ -216,15 +239,20 @@ def top_shows_by_current_sales_speed(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
+    include_past_shows: bool = True,  # По умолчанию включаем для анализа скорости
 ) -> List[Tuple[str, float, str]]:
     """
     Топ шоу по текущей скорости продаж
     
     Показывает одну цифру «билетов/секунду» на основе net скорости 
     изменения количества мест (gross активность, net результат).
+    
+    Args:
+        include_past_shows: если True, включает прошедшие спектакли в анализ.
+                           Полезно для понимания исторических паттернов скорости продаж.
     """
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     speed_data = []
@@ -570,10 +598,14 @@ def calendar_pace_dashboard(
     histories: Sequence[ShowSeatHistory],
     month: Optional[int] = None,
     year: Optional[int] = None,
+    n: int = 10,  # Добавляем для совместимости API (не используется)
 ) -> dict:
     """
     Календарный pace-дашборд с разделением gross/net/refunds
     Возвращает данные для построения кривых спроса
+    
+    Args:
+        n: параметр для совместимости API (не используется, т.к. возвращаем данные по дням)
     """
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year
@@ -638,10 +670,14 @@ def show_financial_summary(
     show_id: str,
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
+    n: int = 10,  # Добавляем для совместимости API (не используется)
 ) -> Optional[dict]:
     """
     Финансовая сводка по конкретному шоу
     Показывает gross/net для бухгалтерии и маркетинга
+    
+    Args:
+        n: параметр для совместимости API (не используется для сводки конкретного шоу)
     """
     # Находим все шоу с данным show_id (исключая удаленные)
     target_shows = [

@@ -57,6 +57,7 @@ LEXICON_RU: dict[str, str] = {
     'TOP_SHOWS_SALES_REPORT_TITLE': 'Топ спектаклей по продажам',
     'TOP_SHOWS_SALES_FORMAT_EXPLANATION': '(валовые / чистые продажи)',
     'TOP_SHOWS_SPEED_REPORT_TITLE': 'Топ спектаклей по скорости продаж',
+    'TOP_SHOWS_SPEED_FORMAT_EXPLANATION': '(✅ = прошедшие спектакли)',
     'PREDICT_SELL_OUT_REPORT_TITLE': 'Прогноз sold out',
     'PREDICT_SELL_OUT_LINE': (
         '{index}. <b>{name}</b> ({show_date})\n'
@@ -80,9 +81,11 @@ LEXICON_RU: dict[str, str] = {
         '   \U0001F39F Продаж: <b>{sold}</b> бил.'
     ),
     'TOP_SHOWS_SPEED_LINE': (
-        '{index}. <b>{name}</b>\n'
+        '{index}. <b>{name}</b>{status}\n'
         '   \u26A1\ufe0f Скорость: <b>{speed:.1f} {unit}</b>'
     ),
+    'SHOW_STATUS_PAST': ' \u2705',  # ✅ для прошедших
+    'SHOW_STATUS_CURRENT': '',       # Пусто для текущих
     'TOP_SHOWS_RETURNS_LINE': (
         '{index}. <b>{name}</b>\n'
         '   \u21A9\ufe0f Возвратов: <b>{returns}</b>'
@@ -92,6 +95,16 @@ LEXICON_RU: dict[str, str] = {
         '   \u21A9\ufe0f Возвратов: <b>{percent:.1f}%</b>'
     ),
     'TRACKING_SINCE': ' с {date}г.',
+    'CALENDAR_PACE_REPORT_TITLE': 'Календарь pace продаж',
+    'CALENDAR_PACE_FORMAT_EXPLANATION': '(валовые / чистые / возвраты)',
+    'CALENDAR_PACE_DATE_LINE': (
+        '<b>{date}</b>: {gross}/{net}/{refunds} ({shows})'
+    ),
+    'CALENDAR_PACE_SUMMARY': (
+        '\n📊 <b>Итого за период:</b>\n'
+        '   🎟 Всего продаж: <b>{total_gross} / {total_net} / {total_refunds}</b>\n'
+        '   📈 Средний темп: <b>{avg_gross:.1f}</b> бил./день'
+    ),
 }
 
 LEXICON_COMMANDS_RU: dict[str, str] = {
@@ -141,6 +154,7 @@ LEXICON_BUTTONS_RU: dict[str, str] = {
     '/report_top_shows_speed': '⚡️ Топ скорости (спектакли)',
     '/report_predict_sell_out': '⏳ Прогноз Sold Out',
     '/report_top_artists_sales': '🎭 Топ продаж (артисты)',
+    '/report_calendar_pace': '📅 Календарь продаж',
     # Добавляем новые кнопки для отчётов по возвратам
     '/report_top_shows_returns': '🔄 Топ по возвратам',
     '/report_top_shows_return_rate': '📉 Топ по % возвратов',

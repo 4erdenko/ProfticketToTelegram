@@ -6,7 +6,8 @@ from services.profticket.analytics import (_calculate_real_sales_from_history,
                                            _calculate_show_sales_from_history,
                                            _get_show_details,
                                            filter_data_by_period,
-                                           parse_show_date)
+                                           parse_show_date,
+                                           calendar_pace_dashboard)
 from telegram.db.models import Show, ShowSeatHistory
 
 
@@ -223,6 +224,63 @@ class AnalyticsUtilsTestCase(unittest.TestCase):
         self.assertEqual(
             net_change, sales - returns
         )  # 100 - 80 = 30 - 10 = 20
+
+    def test_calendar_pace_dashboard_with_n_parameter(self):
+        """Тест что функция calendar_pace_dashboard принимает параметр n без ошибок"""
+        
+        # Создаем тестовые данные
+        shows = [
+            Show(
+                id='s1',
+                show_name='Test Show 1',
+                month=5,
+                year=2024,
+                date='2024-05-15 19:00',
+                actors='[]'
+            ),
+            Show(
+                id='s2',
+                show_name='Test Show 2',
+                month=5,
+                year=2024,
+                date='2024-05-16 19:00',
+                actors='[]'
+            ),
+        ]
+        
+        histories = [
+            ShowSeatHistory(show_id='s1', timestamp=1000, seats=100),
+            ShowSeatHistory(show_id='s1', timestamp=2000, seats=90),  # sold 10
+            ShowSeatHistory(show_id='s1', timestamp=3000, seats=95),  # returned 5
+            ShowSeatHistory(show_id='s2', timestamp=1000, seats=80),
+            ShowSeatHistory(show_id='s2', timestamp=2000, seats=70),   # sold 10
+        ]
+        
+        # Тест что функция принимает параметр n
+        result = calendar_pace_dashboard(
+            shows=shows,
+            histories=histories,
+            month=5,
+            year=2024,
+            n=10  # Этот параметр должен приниматься без ошибок
+        )
+        
+        # Проверяем что результат имеет ожидаемую структуру
+        self.assertIsInstance(result, dict)
+        self.assertIn('dates', result)
+        self.assertIn('gross_sales', result)
+        self.assertIn('net_sales', result)
+        self.assertIn('refunds', result)
+        self.assertIn('show_names', result)
+        
+        # Проверяем что данные корректны
+        self.assertEqual(len(result['dates']), 2)
+        self.assertEqual(result['gross_sales'][0], 10)  # s1 sold 10 gross
+        self.assertEqual(result['net_sales'][0], 5)     # s1 net = 10 - 5 returns = 5
+        self.assertEqual(result['refunds'][0], 5)       # s1 returned 5
+        self.assertEqual(result['gross_sales'][1], 10)  # s2 sold 10
+        self.assertEqual(result['net_sales'][1], 10)    # s2 no returns
+        self.assertEqual(result['refunds'][1], 0)       # s2 no returns
 
 
 if __name__ == '__main__':

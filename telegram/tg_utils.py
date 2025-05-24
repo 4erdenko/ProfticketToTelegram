@@ -195,3 +195,24 @@ async def check_text(message: Message) -> str | None:
         if len(text.split(' ')) == 2:
             return text
     return None
+
+
+async def send_chunks_answer(
+    message: Message, text: str, **kwargs
+) -> None:
+    """
+    Sends a message in chunks using message.answer for all parts.
+    
+    Args:
+        message: The message object
+        text: The message text to be sent
+        **kwargs: Additional arguments to pass to message.answer
+    """
+    chunks = split_message_by_separator(text, separator='\n\n', max_length=settings.MAX_MSG_LEN)
+    
+    for i, chunk in enumerate(chunks):
+        if i == 0:
+            await message.answer(chunk, **kwargs)
+        else:
+            await message.answer(f"<i>Продолжение ({i+1}/{len(chunks)}):</i>\n\n{chunk}", **kwargs)
+            await asyncio.sleep(0.5)  # Небольшая задержка между сообщениями

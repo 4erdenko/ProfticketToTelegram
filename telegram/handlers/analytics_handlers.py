@@ -21,6 +21,7 @@ from telegram.keyboards.analytics_keyboard import (
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
 from telegram.tg_utils import MONTHS_GENITIVE_RU
+from telegram.tg_utils import send_chunks_answer
 
 logger = logging.getLogger(__name__)
 analytics_router = Router(name='analytics_router')
@@ -56,6 +57,10 @@ REPORTS = {
     LEXICON_BUTTONS_RU['/report_top_artists_sales']: {
         'handler': analytics.top_artists_by_sales,
         'title': LEXICON_RU['TOP_ARTISTS_REPORT'],
+    },
+    LEXICON_BUTTONS_RU['/report_calendar_pace']: {
+        'handler': analytics.calendar_pace_dashboard,
+        'title': LEXICON_RU['CALENDAR_PACE_REPORT_TITLE'],
     },
     # Добавляем новые отчёты по возвратам
     LEXICON_BUTTONS_RU['/report_top_shows_returns']: {
@@ -215,17 +220,41 @@ async def cmd_generate_top_report_month(
     if not all_shows or not all_histories:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
-    results = analytics_func(
-        shows=all_shows, histories=all_histories, month=month, year=year, n=10
-    )
-    if not results:
+    
+    # Специальная обработка для отчёта скорости продаж
+    if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
+        results = analytics_func(
+            shows=all_shows, 
+            histories=all_histories, 
+            month=month, 
+            year=year, 
+            n=10,
+            include_past_shows=True  # Включаем прошедшие для анализа скорости
+        )
+    else:
+        results = analytics_func(
+            shows=all_shows, histories=all_histories, month=month, year=year, n=10
+        )
+    
+    # Проверяем результаты с учётом типа отчёта
+    if report_type_key == LEXICON_BUTTONS_RU['/report_calendar_pace']:
+        # calendar_pace возвращает dict, а не list
+        if not results or not results.get('dates'):
+            await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
+            return
+    elif not results:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
         return
+    
     response_lines = [f'<b>{report_title}{period_text}:</b>']
     
     # Добавляем пояснение формата для отчета продаж
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
         response_lines.append(f'<i>{LEXICON_RU["TOP_SHOWS_SALES_FORMAT_EXPLANATION"]}</i>')
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
+        response_lines.append(f'<i>{LEXICON_RU["TOP_SHOWS_SPEED_FORMAT_EXPLANATION"]}</i>')
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_calendar_pace']:
+        response_lines.append(f'<i>{LEXICON_RU["CALENDAR_PACE_FORMAT_EXPLANATION"]}</i>')
 
     event_to_group = {
         s.id: getattr(s, 'show_id', None) or s.id for s in all_shows
@@ -293,12 +322,25 @@ async def cmd_generate_top_report_month(
                 ) + track
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
+        # Создаем маппинг show_id -> is_deleted для определения статуса
+        show_status_map = {}
+        for show in all_shows:
+            group_key = getattr(show, 'show_id', None) or show.id
+            is_deleted = getattr(show, 'is_deleted', False)
+            show_status_map[group_key] = is_deleted
+            
         for i, (name, rate_sec, _id) in enumerate(results, 1):
             rate_day = rate_sec * 60 * 60 * 24
+            
+            # Определяем статус спектакля
+            is_past = show_status_map.get(_id, False)
+            status = LEXICON_RU['SHOW_STATUS_PAST'] if is_past else LEXICON_RU['SHOW_STATUS_CURRENT']
+            
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_SPEED_LINE'].format(
                     index=i,
                     name=name,
+                    status=status,
                     speed=rate_day,
                     unit=LEXICON_RU['SALES_SPEED_UNIT_PER_DAY'],
                 )
@@ -334,8 +376,63 @@ async def cmd_generate_top_report_month(
                     index=i, name=name, percent=percent
                 ) + track
             )
+    elif report_type_key == LEXICON_BUTTONS_RU['/report_calendar_pace']:
+        # Календарный дашборд возвращает словарь, а не список
+        dates = results.get('dates', [])
+        gross_sales = results.get('gross_sales', [])
+        net_sales = results.get('net_sales', [])
+        refunds = results.get('refunds', [])
+        show_names = results.get('show_names', [])
+        
+        # Ограничиваем количество дат для отображения
+        MAX_DATES_TO_SHOW = 15  # Показываем максимум 15 дат
+        
+        # Показываем данные по датам
+        for i, date in enumerate(dates[:MAX_DATES_TO_SHOW]):
+            gross = gross_sales[i] if i < len(gross_sales) else 0
+            net = net_sales[i] if i < len(net_sales) else 0
+            refund = refunds[i] if i < len(refunds) else 0
+            shows = show_names[i] if i < len(show_names) else []
+            
+            # Форматируем список спектаклей
+            shows_text = ", ".join(shows[:3])  # Показываем первые 3
+            if len(shows) > 3:
+                shows_text += f" и ещё {len(shows) - 3}..."
+            
+            response_lines.append(
+                LEXICON_RU['CALENDAR_PACE_DATE_LINE'].format(
+                    date=date,
+                    gross=gross,
+                    net=net,
+                    refunds=refund,
+                    shows=shows_text
+                )
+            )
+        
+        if len(dates) > MAX_DATES_TO_SHOW:
+            response_lines.append(
+                f"\n<i>Показаны первые {MAX_DATES_TO_SHOW} дат из {len(dates)}</i>"
+            )
+        
+        # Добавляем сводку
+        if dates:
+            total_gross = sum(gross_sales)
+            total_net = sum(net_sales)
+            total_refunds = sum(refunds)
+            avg_gross = total_gross / len(dates) if dates else 0
+            
+            response_lines.append(
+                LEXICON_RU['CALENDAR_PACE_SUMMARY'].format(
+                    total_gross=total_gross,
+                    total_net=total_net,
+                    total_refunds=total_refunds,
+                    avg_gross=avg_gross
+                )
+            )
+
     if len(response_lines) > 1:
-        await message.answer('\n\n'.join(response_lines))
+        full_text = '\n\n'.join(response_lines)
+        await send_chunks_answer(message, full_text)
     else:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
 
