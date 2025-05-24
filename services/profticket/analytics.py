@@ -460,10 +460,11 @@ def top_shows_by_returns(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
+    include_past_shows: bool = False,
 ) -> List[Tuple[str, int, str]]:
     """Топ шоу по количеству возвратов"""
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     returns_data = {}
@@ -496,10 +497,11 @@ def top_shows_by_return_rate(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
+    include_past_shows: bool = False,
 ) -> List[Tuple[str, float, str]]:
     """Топ шоу по проценту возвратов"""
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     show_stats = {}
@@ -553,10 +555,11 @@ def top_artists_by_sales(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
+    include_past_shows: bool = False,
 ) -> List[Tuple[str, int]]:
     """Топ артистов по net продажам (продажи минус возвраты)"""
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     show_net_sales = {}
@@ -614,6 +617,7 @@ def calendar_pace_dashboard(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 10,  # Добавляем для совместимости API (не используется)
+    include_past_shows: bool = False,
 ) -> dict:
     """
     Календарный pace-дашборд с разделением gross/net/refunds
@@ -624,7 +628,7 @@ def calendar_pace_dashboard(
         (не используется, т.к. возвращаем данные по дням)
     """
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     # Группируем по датам шоу
@@ -767,13 +771,14 @@ def top_shows_by_sales_detailed(
     month: Optional[int] = None,
     year: Optional[int] = None,
     n: int = 5,
+    include_past_shows: bool = False,
 ) -> List[Tuple[str, int, int, str]]:
     """
     Топ шоу по продажам с детализацией gross/net
     Возвращает: (name, gross_sales, net_sales, id)
     """
     filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year
+        shows, histories, month, year, include_past_shows=include_past_shows
     )
 
     sales_data = {}
