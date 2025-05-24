@@ -1,8 +1,6 @@
 import logging
 from datetime import datetime
 
-from telegram.tg_utils import MONTHS_GENITIVE_RU
-
 import pytz
 from aiogram import F, Router
 from aiogram.filters import StateFilter
@@ -20,6 +18,7 @@ from telegram.keyboards.analytics_keyboard import (
     analytics_months_with_alltime_keyboard)
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
+from telegram.tg_utils import MONTHS_GENITIVE_RU
 
 logger = logging.getLogger(__name__)
 analytics_router = Router(name='analytics_router')
@@ -222,14 +221,18 @@ async def cmd_generate_top_report_month(
         return
     response_lines = [f'<b>{report_title}{period_text}:</b>']
 
-    event_to_group = {s.id: getattr(s, 'show_id', None) or s.id for s in all_shows}
+    event_to_group = {
+        s.id: getattr(s, 'show_id', None) or s.id for s in all_shows
+    }
     first_seen: dict[str, int] = {}
     for h in all_histories:
         gkey = event_to_group.get(h.show_id)
         if not gkey:
             continue
         ts = first_seen.get(gkey)
-        first_seen[gkey] = h.timestamp if ts is None or h.timestamp < ts else ts
+        first_seen[gkey] = (
+            h.timestamp if ts is None or h.timestamp < ts else ts
+        )
 
     # Форматирование результата в зависимости от типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
