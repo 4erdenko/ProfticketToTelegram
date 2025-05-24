@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime
 
+from telegram.tg_utils import MONTHS_GENITIVE_RU
+
 import pytz
 from aiogram import F, Router
 from aiogram.filters import StateFilter
@@ -369,24 +371,18 @@ async def cmd_generate_soldout_report(
 
 # Функция для форматирования timestamp в читаемую дату
 def format_timestamp_to_date(timestamp: int, include_year: bool = True) -> str:
-    """
-    Форматирует timestamp в читаемую строку с датой и временем.
-
-    :param timestamp: Unix timestamp
-    :param include_year: Включать ли год в форматировании
-    :return: Строка с отформатированной датой
-    """
+    """Return formatted date in Russian."""
     try:
         dt_object = datetime.fromtimestamp(timestamp)
         if DEFAULT_TIMEZONE:
             dt_object = dt_object.astimezone(DEFAULT_TIMEZONE)
 
-        if include_year:
-            date_format = '%d %b %Y %H:%M'
-        else:
-            date_format = '%d %b %H:%M'
+        months = {v: k for k, v in MONTHS_GENITIVE_RU.items()}
+        month_name = months.get(dt_object.month, '')
 
-        return dt_object.strftime(date_format)
+        if include_year:
+            return f"{dt_object.day} {month_name} {dt_object.year}"
+        return f"{dt_object.day} {month_name}"
     except Exception as e:
         logger.error(f'Error formatting timestamp {timestamp}: {e}')
         return f'{timestamp} (ошибка форматирования)'
