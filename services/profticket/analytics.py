@@ -198,15 +198,21 @@ def calculate_current_sales_rate(
     history: Sequence[ShowSeatHistory], lookback_hours: int = 24
 ) -> float | None:
     """
-    Расчёт текущей скорости продаж с учётом последних N часов
-    и взвешиванием по времени (более свежие данные важнее)
+    Устойчивый расчёт текущей скорости продаж:
+    - Окно lookback_hours (по умолчанию 24 часа)
+    - Игнорируем интервалы короче MIN_DT (15 мин)
+    - Для достаточного числа точек (>= 7) используем линейную регрессию
+    seats(t)
+      с одноразовым клиппингом выбросов по остаткам;
+      иначе — EWMA по интервалам.
 
-    Использует gross транзакции (все изменения мест), но считает
-    net скорость изменения (учитывает и продажи, и возвраты).
-    Результат: билетов/секунду (можно умножить на 3600 для билетов/час).
+    Возвращает билетов/секунду (умножить на 3600 для билетов/час,
+    на 86400 для билетов/день).
     """
     if len(history) < 2:
         return None
+
+    MIN_DT = 900  # 15 минут — минимальный шаг между соседними точками
 
     records = sorted(history, key=lambda r: r.timestamp)
     current_ts = records[-1].timestamp
@@ -218,29 +224,92 @@ def calculate_current_sales_rate(
     if len(recent_records) < 2:
         return None
 
-    rates = []
-    weights = []
-
-    for prev, curr in zip(recent_records, recent_records[1:], strict=False):
-        dt = curr.timestamp - prev.timestamp
-        if dt < 300:  # Игнорируем интервалы менее 5 минут
+    # Оставляем только точки с шагом >= MIN_DT
+    filtered: list[ShowSeatHistory] = []
+    for rec in recent_records:
+        if not filtered:
+            filtered.append(rec)
             continue
+        if rec.timestamp - filtered[-1].timestamp >= MIN_DT:
+            filtered.append(rec)
 
-        # Чистая скорость (с учётом возвратов)
+    if len(filtered) < 2:
+        return None
+
+    # Если точек >= 7 (интервалов >= 6): линейная регрессия ( seats = a*t + b )
+    # Примечание: t в часах для численной стабильности; rate_sec = -a/3600
+    if len(filtered) >= 7:
+        t0 = filtered[0].timestamp
+        t_hours = np.array(
+            [(r.timestamp - t0) / 3600 for r in filtered], dtype=float
+        )
+        y_seats = np.array([r.seats for r in filtered], dtype=float)
+
+        # Первичная оценка
+        a1, b1 = np.polyfit(t_hours, y_seats, 1)
+        resid = y_seats - (a1 * t_hours + b1)
+        med = np.median(resid)
+        mad = np.median(np.abs(resid - med)) if np.any(resid) else 0.0
+
+        # Порог клиппинга: 3*MAD (или 2*STD при MAD==0)
+        if mad > 0:
+            thr = 3.0 * mad
+        else:
+            std = np.std(resid)
+            thr = 2.0 * std
+
+        if thr > 0:
+            mask = np.abs(resid - med) <= thr
+            if mask.sum() >= 2:
+                a2, b2 = np.polyfit(t_hours[mask], y_seats[mask], 1)
+                slope = a2
+            else:
+                slope = a1
+        else:
+            slope = a1
+
+        rate_sec = max(0.0, -slope / 3600.0)
+        return rate_sec if rate_sec > 0 else None
+
+    # Иначе — EWMA по интервалам (как раньше), но с MIN_DT=15 мин
+    rates: list[float] = []
+    weights: list[float] = []
+    for prev, curr in zip(filtered, filtered[1:], strict=False):
+        dt = curr.timestamp - prev.timestamp
+        if dt < MIN_DT:
+            continue
         rate = (prev.seats - curr.seats) / dt
-
-        # Вес на основе давности (экспоненциальное убывание)
         age_hours = (current_ts - curr.timestamp) / 3600
         weight = np.exp(-age_hours / (lookback_hours / 2))
-
         rates.append(rate)
         weights.append(weight)
 
     if not rates:
         return None
+    return float(np.average(rates, weights=weights))
 
-    # Взвешенное среднее
-    return np.average(rates, weights=weights)
+
+def _count_valid_intervals(
+    history: Sequence[ShowSeatHistory],
+    lookback_hours: int = 24,
+    min_dt: int = 900,
+) -> int:
+    if len(history) < 2:
+        return 0
+    records = sorted(history, key=lambda r: r.timestamp)
+    current_ts = records[-1].timestamp
+    cutoff_ts = current_ts - lookback_hours * 3600
+    recent = [r for r in records if r.timestamp >= cutoff_ts]
+    if len(recent) < 2:
+        return 0
+    count = 0
+    last = recent[0]
+    for rec in recent[1:]:
+        dt = rec.timestamp - last.timestamp
+        if dt >= min_dt:
+            count += 1
+            last = rec
+    return count
 
 
 def top_shows_by_current_sales_speed(
@@ -271,7 +340,9 @@ def top_shows_by_current_sales_speed(
         shows, histories, month, year, include_past_shows=include_past_shows
     )
 
-    speed_data = []
+    # Агрегируем по group_key (show_id или id):
+    # считаем средневзвешенную скорость с весом по числу валидных интервалов
+    agg_by_group: dict[str, dict[str, float | str]] = {}
 
     for show in filtered_shows:
         h_rows = history_buckets.get(show.id, [])
@@ -281,9 +352,31 @@ def top_shows_by_current_sales_speed(
         # Используем последние 24 часа для оценки текущей скорости
         current_rate = calculate_current_sales_rate(h_rows, lookback_hours=24)
         if current_rate is not None and current_rate > 0:
-            speed_data.append((show.show_name, current_rate, show.id))
+            group_key = getattr(show, 'show_id', None) or show.id
+            weight = _count_valid_intervals(
+                h_rows, lookback_hours=24, min_dt=900
+            )
+            if weight <= 0:
+                weight = 1
+            rec = agg_by_group.get(group_key)
+            if rec is None:
+                agg_by_group[group_key] = {
+                    'name': show.show_name,
+                    'rate_sum': current_rate * weight,
+                    'w_sum': float(weight),
+                }
+            else:
+                rec['rate_sum'] = (
+                    float(rec['rate_sum']) + current_rate * weight
+                )
+                rec['w_sum'] = float(rec['w_sum']) + float(weight)
 
     # Сортируем по скорости
+    speed_data = []
+    for gid, payload in agg_by_group.items():
+        name = str(payload['name'])
+        rate = float(payload['rate_sum']) / float(payload['w_sum'])
+        speed_data.append((name, rate, gid))
     speed_data.sort(key=lambda x: -x[1])
     return speed_data[:n]
 
@@ -297,7 +390,8 @@ def predict_sold_out_advanced(
     Улучшенное предсказание sold-out с учётом тренда
     и адаптивной оценкой скорости
     """
-    if len(history) < 3:
+    # Требуем минимум 4 точки (>= 3 интервалов)
+    if len(history) < 4:
         return None
 
     records = sorted(history, key=lambda r: r.timestamp)
@@ -313,14 +407,37 @@ def predict_sold_out_advanced(
     cutoff_ts = max(records[0].timestamp, now_ts - lookback_seconds)
     recent_records = [r for r in records if r.timestamp >= cutoff_ts]
 
-    if len(recent_records) < 3:
-        recent_records = records[-10:]  # Берём последние 10 записей
+    # Отфильтровываем слишком короткие интервалы (<5 минут) — шум
+    MIN_DT = 300  # 5 минут
+    filtered: list[ShowSeatHistory] = []
+    for rec in recent_records:
+        if not filtered:
+            filtered.append(rec)
+            continue
+        if rec.timestamp - filtered[-1].timestamp >= MIN_DT:
+            filtered.append(rec)
+
+    # Если после фильтрации точек меньше 4, попробуем взять хвост истории
+    # с требованием соблюдения минимального шага
+    if len(filtered) < 4:
+        tail_filtered: list[ShowSeatHistory] = []
+        for rec in records[-10:]:  # ограничим хвост десятью записями
+            if not tail_filtered:
+                tail_filtered.append(rec)
+                continue
+            if rec.timestamp - tail_filtered[-1].timestamp >= MIN_DT:
+                tail_filtered.append(rec)
+        filtered = tail_filtered
+
+    # Требуем минимум 4 точки (>=3 интервала) после фильтрации
+    if len(filtered) < 4:
+        return None
 
     # Собираем временные ряды
     timestamps = []
     seats = []
 
-    for rec in recent_records:
+    for rec in filtered:
         timestamps.append(rec.timestamp)
         seats.append(rec.seats)
 
@@ -355,21 +472,24 @@ def predict_sold_out_advanced(
                 return sold_out_ts
 
     # Fallback: линейная экстраполяция по последним точкам
-    if len(recent_records) >= 2:
-        last_rec = recent_records[-1]
-        # Средняя скорость за последние записи
-        total_time = recent_records[-1].timestamp - recent_records[0].timestamp
-        total_sold = recent_records[0].seats - recent_records[-1].seats
+    if len(filtered) >= 4:
+        last_rec = filtered[-1]
+        # Средняя скорость по чистому изменению за период
+        total_time = filtered[-1].timestamp - filtered[0].timestamp
+        total_sold = filtered[0].seats - filtered[-1].seats
 
         if total_time > 0 and total_sold > 0:
             avg_rate = total_sold / total_time
             seconds_left = last_rec.seats / avg_rate
 
-            if seconds_left > 0 and seconds_left < 365 * 24 * 3600:
+            if 0 < seconds_left < 365 * 24 * 3600:
                 prediction = last_rec.timestamp + int(seconds_left)
-                if show_dt and prediction <= show_dt.timestamp():
-                    if prediction > now_ts:
-                        return prediction
+                if (
+                    show_dt
+                    and prediction <= show_dt.timestamp()
+                    and prediction > now_ts
+                ):
+                    return prediction
 
     return None
 
@@ -511,34 +631,33 @@ def top_shows_by_return_rate(
             continue
 
         sold, returned = get_net_sales_and_returns(h_rows)
-        total_transactions = sold + returned
 
-        # Фильтруем шоу с малым количеством транзакций
-        if total_transactions < 10:  # Минимальный порог
+        # Используем базу по продажам: return-rate = returned / sold
+        # Фильтруем шоу с малым количеством продаж
+        MIN_SOLD = 10
+        if sold < MIN_SOLD:
             continue
 
-        return_rate = (
-            returned / total_transactions if total_transactions > 0 else 0
-        )
+        return_rate = returned / sold if sold > 0 else 0.0
 
         group_key = getattr(show, 'show_id', None) or show.id
         if group_key not in show_stats:
             show_stats[group_key] = {
                 'name': show.show_name,
                 'return_rate': return_rate,
-                'total_transactions': total_transactions,
+                'total_sold': sold,
                 'id': group_key,
             }
         else:
             # Если уже есть, пересчитываем средневзвешенный процент
             existing = show_stats[group_key]
-            new_total = existing['total_transactions'] + total_transactions
+            new_total = existing['total_sold'] + sold
             new_rate = (
-                existing['return_rate'] * existing['total_transactions']
-                + return_rate * total_transactions
+                existing['return_rate'] * existing['total_sold']
+                + return_rate * sold
             ) / new_total
             existing['return_rate'] = new_rate
-            existing['total_transactions'] = new_total
+            existing['total_sold'] = new_total
 
     # Сортируем по проценту возвратов
     result = [
@@ -659,8 +778,19 @@ def calendar_pace_dashboard(
         date_groups[show_date]['total_refunds'] += returned
         date_groups[show_date]['histories'].extend(h_rows)
 
-    # Сортируем по дате
-    sorted_dates = sorted(date_groups.items())
+    # Сортируем по дате (распарсиваем строковые даты в datetime)
+    # Для неподдающихся парсингу — сортируем по строковому значению после дат
+    sortable: list[tuple[int, object, str, dict]] = []
+    for date_str, data in date_groups.items():
+        dt = parse_show_date(date_str)
+        if dt is not None:
+            sortable.append((0, dt, date_str, data))
+        else:
+            sortable.append((1, date_str, date_str, data))
+
+    sorted_dates = [
+        (date_str, data) for _, _, date_str, data in sorted(sortable)
+    ]
 
     # Валидация: если нет данных, возвращаем пустую структуру
     if not sorted_dates:
