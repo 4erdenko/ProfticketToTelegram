@@ -12,6 +12,6 @@ asyncpg==0.30.0
 tenacity==9.1.2
 fake-useragent==2.2.0
 pytest==8.3.5
-flake8==7.2.0
+ruff==0.12.10
 isort==6.0.1
 numpy==2.2.6
