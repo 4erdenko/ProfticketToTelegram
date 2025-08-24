@@ -1,85 +1,143 @@
-# Ticket Sale Service Parser
+# Profticket To Telegram — бот театральной афиши и аналитики
 
-This Telegram bot is designed to collect and provide information about theater performances. The bot has different
-functionalities depending on whether the user is registered (has a record in the `P_SHOWS` dictionary) or not.
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Aiogram](https://img.shields.io/badge/Aiogram-3.x-0aa)
+![Ruff](https://img.shields.io/badge/Ruff-lint%20%26%20format-ff69b4)
+![Tests](https://img.shields.io/badge/Tests-pytest-informational)
+![Docker](https://img.shields.io/badge/Docker-compose-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-## Main Functionality
+Русская документация. For English version see README.en.md.
 
-### For unregistered users:
+## Содержание
 
-1. `/start` - command that greets the user and offers to view the event schedule.
-2. `Этот месяц` - displays a list of performances for the current month.
-3. `Следующий месяц` - displays a list of performances for the next month.
+- Назначение
+- Возможности
+- Архитектура
+- Требования
+- Установка
+- Переменные окружения
+- Docker
+- Тесты и линтинг
+- Команды и меню
+- Логи
+- Вклад
+- Дорожная карта
+- Лицензия и контакты
 
-### For registered users:
+## Назначение
 
-1. `/start` - command that greets the user and opens the personal menu.
-2. `Этот месяц` - displays a list of performances for the current month.
-3. `Следующий месяц` - displays a list of performances for the next month.
-4. `Мои спектакли` - opens a menu to choose a month and displays personalized information about the performances for the
-   selected month.
-5. `↩️` - returns the user to the main menu.
+Telegram‑бот для показа спектаклей/событий из Profticket и оперативной аналитики
+продаж. Поддерживает персональные фильтры пользователей (по артистам) и
+админ‑панель с метриками.
 
-## Installation and Configuration
+## Возможности
 
-1. Install the necessary dependencies from the `requirements.txt` file:
+- Главное меню: выбор месяца, персональный фильтр «👤Выбрать актёра/актрису»,
+  переход в «📊 Аналитика».
+- Персональные показы: расписание только с участием выбранного артиста.
+- Аналитика:
+  - 🏆 Топ продаж (спектакли) — валовые/чистые продажи;
+  - ⚡️ Топ скорости (спектакли) — текущий темп продаж;
+  - ⏳ Прогноз Sold Out — ближайшие sold out;
+  - 🎭 Топ продаж (артисты);
+  - 📅 Календарь продаж — по датам; 
+  - 🔄 Топ по возвратам и 📉 Топ по % возвратов.
+- Длинные ответы разбиваются на части («чанки») — не упираются в лимиты Telegram.
+- Админ‑панель (🛠 Админка):
+  - 📈 Статистика — сводка/топы, выбранный артист у пользователей;
+  - 👥 Пользователи — активность, роли, топы по запросам/троттлингу;
+  - 🎭 Предпочтения — топ выбранных артистов, примеры пользователей,
+    список без выбора;
+  - 🗄 База (шоу) — метрики по shows/истории мест, свежесть данных.
 
-```bash
+Админка доступна `ADMIN_ID` и пользователям с `User.admin=True`.
+
+## Архитектура
+
+- `main.py` — запуск, middlewares, фоновое обновление данных.
+- `telegram/` — хендлеры, клавиатуры, фильтры, middlewares, утилиты.
+- `services/profticket/` — клиент и аналитика Profticket.
+- `alembic/` — миграции БД; `alembic.ini` — конфиг Alembic.
+- `tests/` — pytest‑тесты для аналитики и утилит.
+
+## Требования
+
+- Python 3.11
+- PostgreSQL 14+
+
+## Установка
+
+1) Создайте окружение и установите зависимости:
+```
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Replace `YOUR_TOKEN` in the `config.py` file with your Telegram bot token.
+2) Скопируйте `.env.example` в `.env` и заполните:
+```
+cp .env.example .env
+```
 
-3. Fill in the `COM_ID`, `PERSONS`, and `P_SHOWS` variables in the `config.py` file with the relevant data about the
-   company, users, and performances.
-   Additionally, in the json_library folder, there is a ready-to-use script for parsing all the organizations connected
-   to the ticket service. When running the `profticket_place_parser.py` script, it will create a `profticket.json` file
-   in the json_library folder with theater data. Choose the required ID and specify it in `COM_ID`.
+3) (Опционально) Примените миграции:
+```
+alembic upgrade head
+```
 
-4. Run the bot by executing the following command:
-
-```bash
+4) Запустите бота:
+```
 python main.py
 ```
 
-Now your Telegram bot is ready for use.
+## Переменные окружения
 
-## Logging
+См. `.env.example`. Минимально нужны: `BOT_TOKEN`/`TEST_BOT_TOKEN`, `ADMIN_ID`,
+`DB_URL`, `COM_ID`, `DEFAULT_TIMEZONE`. Для запуска в Docker установите
+`IN_DOCKER=true` — тогда используется `BOT_TOKEN`.
 
-The bot uses Python's built-in logging module to log important events and errors. The logging configuration is set up in the `main.py` file. By default, the log messages will be printed to the standard output (console) with a logging level of `INFO`.
+## Docker
 
-To adjust the logging level or add other logging handlers, you can modify the `logging.basicConfig()` call in `main.py`. For example, you can add a file handler to store log messages in a file:
+Быстрый старт:
+```
+docker-compose up -d
+```
+Поднимет Postgres и бот. Проверьте переменные окружения.
 
-```python
-import logging
-import sys
+## Тесты и линтинг
 
-from aiogram import executor
-from aiogram.utils.exceptions import TelegramAPIError, NetworkError
-
-from telegram.bot import dp
-
-if __name__ == '__main__':
-    logging.basicConfig(
-        level=logging.INFO,
-        datefmt='%Y-%m-%d %H:%M:%S',
-        format='%(asctime)s [%(levelname)s]: %(message)s',
-        handlers=[
-            logging.StreamHandler(stream=sys.stdout),
-            logging.FileHandler(filename="logfile.log", mode="a"),  # Add this line
-        ],
-    )
-    try:
-        executor.start_polling(dp, skip_updates=True)
-    except NetworkError as e:
-        logging.error(f"Network Error: {e}")
-    except TelegramAPIError as e:
-        logging.error(f"Telegram API Error: {e}")
-        if 'Bad Gateway' in str(e):
-            logging.error('Bad Gateway Error')
+```
+pytest -q
+ruff format . && ruff check --fix .
 ```
 
-This will create a file named `logfile.log` in the same directory as your `main.py` file, and it will append log messages to the file. You can customize the filename
-## Recent Changes
-- Shows are sorted by date when fetching from DB.
-- Added `parse_show_date` utility to handle Russian dates.
+Тесты быстрые, сетевые вызовы замоканы.
+
+## Команды и меню
+
+- Нативное меню (см. `telegram/keyboards/native_menu.py`): `/start`, `/help`,
+  `/set_actor`, `/analytics`.
+- Тексты кнопок — `telegram/lexicon/lexicon_ru.py`.
+
+## Логи
+
+Настраиваются в `telegram/utils/startup.py` (`setup_logging`), выводятся в
+stdout через `coloredlogs` на уровне INFO.
+
+## Вклад
+
+Перед PR проверьте локально:
+- `ruff format . && ruff check --fix .`
+- `pytest -q`
+- Соблюдайте Conventional Commits (например: `feat(telegram): ...`).
+- Не включайте секреты в коммиты; используйте `.env`.
+
+## Дорожная карта
+
+- Пагинация в админ‑отчётах и аналитике.
+- Экспорт CSV для предпочтений/топов.
+- Поиск пользователя (id/username) и быстрая карточка.
+- Управление ролями/баном из админ‑меню.
+
+## Лицензия и контакты
+
+Лицензия — MIT (см. `LICENSE`). Вопросы: см. `ADMIN_USERNAME` в `.env`.
