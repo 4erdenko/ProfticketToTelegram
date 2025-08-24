@@ -303,7 +303,9 @@ class ProfticketsInfo:
 
             except httpx.TimeoutException as e:
                 logger.error(f'Timeout error: {str(e)}')
-                raise ConnectionTimeoutError(f'Connection timeout: {str(e)}')
+                raise ConnectionTimeoutError(
+                    f'Connection timeout: {str(e)}'
+                ) from e
 
             except httpx.ProxyError as e:
                 logger.error(f'Proxy error: {str(e)}')
@@ -317,7 +319,7 @@ class ProfticketsInfo:
 
             except Exception as e:
                 logger.error(f'Request error: {str(e)}')
-                raise ProfticketAPIError(f'Request error: {str(e)}')
+                raise ProfticketAPIError(f'Request error: {str(e)}') from e
 
     async def _load_data(self) -> list[dict]:
         """
@@ -400,7 +402,9 @@ class ProfticketsInfo:
                         f'Reason: {stop_reason}'
                     )
                     return items
-                raise ProfticketAPIError(f'Failed to load data: {str(e)}')
+                raise ProfticketAPIError(
+                    f'Failed to load data: {str(e)}'
+                ) from e
 
         logger.info(
             f'Completed loading {len(items)} items. Stop reason: {stop_reason}'
@@ -452,7 +456,7 @@ class ProfticketsInfo:
         except Exception as e:
             logger.error(f'Error loading places: {str(e)}')
             self.free_places = {}
-            raise ProfticketAPIError(f'Failed to load places: {str(e)}')
+            raise ProfticketAPIError(f'Failed to load places: {str(e)}') from e
 
     def _generate_buy_link(self, event_id: str, show_id: str) -> str:
         """
@@ -607,7 +611,7 @@ class ProfticketsInfo:
             logger.error(f'Error collecting information: {str(e)}')
             raise ProfticketAPIError(
                 f'Failed to collect information: {str(e)}'
-            )
+            ) from e
 
 
 if __name__ == '__main__':
