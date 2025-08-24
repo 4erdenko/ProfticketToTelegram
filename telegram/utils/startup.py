@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from config import settings
 from telegram.handlers import (
+    admin_handlers,
     analytics_handlers,
     maintenance_handler,
     personal_handlers,
@@ -60,6 +61,7 @@ async def setup_dispatcher() -> Dispatcher:
     dp.include_router(user_handlers.user_router)
     dp.include_router(personal_handlers.personal_user_router)
     dp.include_router(analytics_handlers.analytics_router)
+    dp.include_router(admin_handlers.admin_router)
     return dp
 
 
