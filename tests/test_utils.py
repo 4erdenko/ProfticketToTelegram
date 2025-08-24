@@ -41,7 +41,7 @@ class UtilsTestCase(unittest.TestCase):
         self.assertEqual(headers['User-Agent'], 'UA')
 
     def test_split_message_by_separator(self):
-        text = 'a\n------------------------\nb\n' '------------------------\nc'
+        text = 'a\n------------------------\nb\n------------------------\nc'
         parts = tg_utils.split_message_by_separator(text, max_length=40)
         self.assertEqual(len(parts), 3)
         self.assertTrue(parts[0].endswith('------------------------'))

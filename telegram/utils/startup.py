@@ -1,9 +1,9 @@
 import asyncio
+import contextlib
 import logging
 import os
 import signal
 import sys
-from typing import Optional
 
 import coloredlogs
 from aiogram import Bot, Dispatcher
@@ -11,9 +11,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
 from config import settings
-from telegram.handlers import (analytics_handlers, maintenance_handler,
-                               personal_handlers, throttling_handler,
-                               user_handlers)
+from telegram.handlers import (
+    analytics_handlers,
+    maintenance_handler,
+    personal_handlers,
+    throttling_handler,
+    user_handlers,
+)
 from telegram.keyboards.native_menu import set_native_menu
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS
 
@@ -80,7 +84,7 @@ async def on_startup(bot: Bot, admin_id: int) -> None:
 
 
 async def on_shutdown(
-    bot: Bot, admin_id: int, update_task: Optional[asyncio.Task] = None
+    bot: Bot, admin_id: int, update_task: asyncio.Task | None = None
 ) -> None:
     """
     Performs bot shutdown actions.
@@ -94,10 +98,8 @@ async def on_shutdown(
         await bot.send_message(admin_id, LEXICON_LOGS['BOT_STOPPED'])
         if update_task and not update_task.done():
             update_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await update_task
-            except asyncio.CancelledError:
-                pass
         await bot.session.close()
         logger.info(LEXICON_LOGS['BOT_SHUTDOWN_COMPLETE'])
     except Exception as e:

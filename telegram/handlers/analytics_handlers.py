@@ -16,8 +16,11 @@ from services.profticket import analytics
 from services.profticket.analytics import TITLES_TO_SKIP
 from telegram.db.models import Show, ShowSeatHistory
 from telegram.keyboards.analytics_keyboard import (
-    RUS_TO_MONTH, analytics_main_menu_keyboard, analytics_months_keyboard,
-    analytics_months_with_alltime_keyboard)
+    RUS_TO_MONTH,
+    analytics_main_menu_keyboard,
+    analytics_months_keyboard,
+    analytics_months_with_alltime_keyboard,
+)
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
 from telegram.tg_utils import MONTHS_GENITIVE_RU, send_chunks_answer
@@ -132,9 +135,7 @@ async def cmd_select_report_type(
 ):
     # Получаем все доступные месяцы из базы
     shows = (await session.execute(select(Show))).scalars().all()
-    months = sorted(
-        set((s.month, s.year) for s in shows if s.month and s.year)
-    )
+    months = sorted({(s.month, s.year) for s in shows if s.month and s.year})
     if not months:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
@@ -154,9 +155,7 @@ async def cmd_select_soldout_report(
 ):
     # Получаем все доступные месяцы из базы
     shows = (await session.execute(select(Show))).scalars().all()
-    months = sorted(
-        set((s.month, s.year) for s in shows if s.month and s.year)
-    )
+    months = sorted({(s.month, s.year) for s in shows if s.month and s.year})
     if not months:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return

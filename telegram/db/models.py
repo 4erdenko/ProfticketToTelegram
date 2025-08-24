@@ -1,8 +1,15 @@
 from datetime import datetime
 
 import pytz
-from sqlalchemy import (BigInteger, Boolean, Column, ForeignKey, Integer,
-                        String, func)
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    func,
+)
 
 from config import settings
 from telegram.db import Base

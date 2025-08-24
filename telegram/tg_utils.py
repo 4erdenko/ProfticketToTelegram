@@ -110,10 +110,7 @@ def get_result_message(seats, previous_seats, show_name, date, buy_link):
     seats_diff = ''
     if previous_seats is not None and seats != previous_seats:
         diff = seats - previous_seats
-        if diff < 0:
-            seats_diff = f' ({diff} 🔻)'
-        else:
-            seats_diff = f' (+{diff} 🔺)'
+        seats_diff = f' ({diff} 🔻)' if diff < 0 else f' (+{diff} 🔺)'
 
     return (
         f'📅<strong> {date}</strong>\n'
@@ -215,7 +212,7 @@ async def send_chunks_answer(message: Message, text: str, **kwargs) -> None:
             await message.answer(chunk, **kwargs)
         else:
             await message.answer(
-                f'<i>Продолжение ({i+1}/{len(chunks)}):</i>\n\n{chunk}',
+                f'<i>Продолжение ({i + 1}/{len(chunks)}):</i>\n\n{chunk}',
                 **kwargs,
             )
             await asyncio.sleep(0.5)  # Небольшая задержка между сообщениями

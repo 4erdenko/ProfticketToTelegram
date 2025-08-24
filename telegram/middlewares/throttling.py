@@ -38,7 +38,6 @@ class ThrottlingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any | None:
-
         event_user: User = data['event_from_user']
 
         session = data['session']

@@ -1,10 +1,12 @@
 import unittest
 from datetime import datetime
 
-from services.profticket.analytics import (calendar_pace_dashboard,
-                                           filter_data_by_period,
-                                           get_net_sales_and_returns,
-                                           parse_show_date)
+from services.profticket.analytics import (
+    calendar_pace_dashboard,
+    filter_data_by_period,
+    get_net_sales_and_returns,
+    parse_show_date,
+)
 from telegram.db.models import Show, ShowSeatHistory
 
 
@@ -277,11 +279,11 @@ class AnalyticsUtilsTestCase(unittest.TestCase):
         self.assertEqual(result['gross_sales'][0], 10)  # s1 sold 10 gross
         self.assertEqual(
             result['net_sales'][0], 5
-        )     # s1 net = 10 - 5 returns = 5
-        self.assertEqual(result['refunds'][0], 5)       # s1 returned 5
+        )  # s1 net = 10 - 5 returns = 5
+        self.assertEqual(result['refunds'][0], 5)  # s1 returned 5
         self.assertEqual(result['gross_sales'][1], 10)  # s2 sold 10
-        self.assertEqual(result['net_sales'][1], 10)    # s2 no returns
-        self.assertEqual(result['refunds'][1], 0)       # s2 no returns
+        self.assertEqual(result['net_sales'][1], 10)  # s2 no returns
+        self.assertEqual(result['refunds'][1], 0)  # s2 no returns
 
 
 if __name__ == '__main__':

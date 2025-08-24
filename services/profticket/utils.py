@@ -3,9 +3,11 @@ import inspect
 import pymorphy2
 
 if not hasattr(inspect, 'getargspec'):
+
     def getargspec(func):
         spec = inspect.getfullargspec(func)
         return spec.args, spec.varargs, spec.varkw, spec.defaults
+
     inspect.getargspec = getargspec
 
 morph = pymorphy2.MorphAnalyzer()

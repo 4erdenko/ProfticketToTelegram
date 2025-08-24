@@ -54,7 +54,7 @@ def analytics_main_menu_keyboard() -> ReplyKeyboardMarkup:
 
 
 def analytics_period_choice_keyboard(
-        report_command_base: str,
+    report_command_base: str,
 ) -> ReplyKeyboardMarkup:
     """
     Клавиатура для выбора периода отчёта (для всех кроме sold out)
@@ -82,7 +82,7 @@ def analytics_period_choice_keyboard(
 
 
 def analytics_months_keyboard(
-        months: list[tuple[int, int]]
+    months: list[tuple[int, int]],
 ) -> ReplyKeyboardMarkup:
     """
     Клавиатура для выбора месяца для прогноза sold out.
@@ -97,7 +97,7 @@ def analytics_months_keyboard(
         )
         buttons.append(KeyboardButton(text=f'{month_name} {year}'))
     # Разбиваем по 2 в ряд
-    keyboard = [buttons[i: i + 2] for i in range(0, len(buttons), 2)]
+    keyboard = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
     keyboard.append(
         [KeyboardButton(text=LEXICON_BUTTONS_RU['/back_to_analytics_menu'])]
     )
@@ -107,7 +107,7 @@ def analytics_months_keyboard(
 
 
 def analytics_months_with_alltime_keyboard(
-        months: list[tuple[int, int]]
+    months: list[tuple[int, int]],
 ) -> ReplyKeyboardMarkup:
     now = datetime.now(DEFAULT_TIMEZONE)
     filtered = [(m, y) for m, y in months if (y, m) >= (now.year, now.month)]
@@ -117,7 +117,7 @@ def analytics_months_with_alltime_keyboard(
             datetime(year, month, 1).strftime('%B'), f'Месяц {month}'
         )
         buttons.append(KeyboardButton(text=f'{month_name} {year}'))
-    keyboard = [buttons[i: i + 2] for i in range(0, len(buttons), 2)]
+    keyboard = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
     keyboard.append(
         [KeyboardButton(text=LEXICON_BUTTONS_RU['/back_to_analytics_menu'])]
     )

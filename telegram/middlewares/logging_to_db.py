@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Awaitable, Callable, Dict
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware, types
 from aiogram.types import TelegramObject, Update
@@ -11,11 +12,10 @@ logger = logging.getLogger(__name__)
 
 class UserLoggingMiddleware(BaseMiddleware):
     def __init__(self):
-
         super().__init__()
 
     async def on_process_message(
-        self, update: types.Update, data: Dict[str, Any]
+        self, update: types.Update, data: dict[str, Any]
     ) -> None:
         session = data['session']
         if update.message:
@@ -32,9 +32,9 @@ class UserLoggingMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
         event: Update,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> Any:
         if isinstance(event, Update):
             await self.on_process_message(event, data)

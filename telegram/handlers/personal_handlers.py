@@ -7,14 +7,21 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from telegram.db.user_operations import (get_available_months,
-                                         get_shows_from_db, get_user,
-                                         search_count, set_spectacle_fio)
+from telegram.db.user_operations import (
+    get_available_months,
+    get_shows_from_db,
+    get_user,
+    search_count,
+    set_spectacle_fio,
+)
 from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.keyboards.personal_keyboard import personal_keyboard
-from telegram.lexicon.lexicon_ru import (LEXICON_BUTTONS_RU, LEXICON_LOGS,
-                                         LEXICON_RU)
+from telegram.lexicon.lexicon_ru import (
+    LEXICON_BUTTONS_RU,
+    LEXICON_LOGS,
+    LEXICON_RU,
+)
 from telegram.tg_utils import check_text, send_chunks_edit
 
 personal_user_router = Router(name=__name__)

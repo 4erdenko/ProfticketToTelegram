@@ -1,0 +1,49 @@
+[tool.ruff]
+line-length = 79
+output-format = "concise"
+show-fixes = true
+target-version = "py311"
+# Help Ruff detect first-party packages (improves isort grouping):
+src = ["."]
+exclude = [
+  ".venv", "venv", "**/venv",
+  "env",  "**/env",
+  ".github", "**/.github",
+  "bench.py", "lexicon_ru.py", "lexicon_logs.py",
+    "alembic/*",
+]
+
+[tool.ruff.format]
+# Blue-like: single quotes for normal strings; docstrings stay triple-double.
+quote-style = "single"
+docstring-code-format = true
+
+[tool.ruff.lint]
+# Enable isort (I) and line-length diagnostics (E501) in addition to default E/F.
+# (Default Ruff already enables F + subset of E; we add I and E501 explicitly.)
+extend-select = [
+    "I", # isort-equivalent (imports)
+    "B", # flake8-bugbear (useful correctness hints)
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF100", # remove unused "noqa"
+    "W505"  # docstring/comment line length (advisory only; no autofix)
+]
+ignore = ["F811", "W605"]
+task-tags = ["TODO", "FIXME", "XXX", "HACK"]
+
+[tool.ruff.lint.isort]
+# Classic isort section order and spacing.
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+lines-between-types = 0      # isort default: no extra blank line between "import" and "from" within a section
+lines-after-imports = -1     # isort default: auto
+from-first = false           # isort default: straight imports before "from"
+force-sort-within-sections = false
+known-first-party = ["telegram", "services"]
+
+
+[tool.ruff.lint.pycodestyle]
+# Keep E501 noise down for TODO/FIXME comments; docstrings shorter by convention.
+ignore-overlong-task-comments = true
+max-doc-length = 79

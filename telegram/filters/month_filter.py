@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any
 
 from aiogram.filters import BaseFilter
 from aiogram.types import Message
@@ -13,7 +13,7 @@ class MonthFilter(BaseFilter):
 
     async def __call__(
         self, message: Message, session: AsyncSession
-    ) -> Union[bool, Dict[str, Any]]:
+    ) -> bool | dict[str, Any]:
         months = await get_available_months(session)
         if not months:
             return False

@@ -5,12 +5,18 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from telegram.db.user_operations import (get_available_months,
-                                         get_shows_from_db, search_count)
+from telegram.db.user_operations import (
+    get_available_months,
+    get_shows_from_db,
+    search_count,
+)
 from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
-from telegram.lexicon.lexicon_ru import (LEXICON_COMMANDS_RU, LEXICON_LOGS,
-                                         LEXICON_RU)
+from telegram.lexicon.lexicon_ru import (
+    LEXICON_COMMANDS_RU,
+    LEXICON_LOGS,
+    LEXICON_RU,
+)
 from telegram.tg_utils import send_chunks_edit
 
 user_router = Router(name=__name__)

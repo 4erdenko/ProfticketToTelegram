@@ -1,13 +1,16 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, Type
+from typing import Any
 
 import pytz
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import (AsyncSession, async_sessionmaker,
-                                    create_async_engine)
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from config import settings
 from telegram.db import User
@@ -88,10 +91,7 @@ def get_result_message(
     seats_diff = ''
     if previous_seats is not None and seats != previous_seats:
         diff = seats - previous_seats
-        if diff < 0:
-            seats_diff = f' ({diff} 🔻)'
-        else:
-            seats_diff = f' (+{diff} 🔺)'
+        seats_diff = f' ({diff} 🔻)' if diff < 0 else f' (+{diff} 🔺)'
 
     return (
         f'📅<strong> {date}</strong>\n'
@@ -179,7 +179,7 @@ async def check_data_freshness(session_pool: async_sessionmaker) -> bool:
         return False
 
 
-async def get_user(session: AsyncSession, user_id: int) -> Type[User] | None:
+async def get_user(session: AsyncSession, user_id: int) -> type[User] | None:
     """
     Get user by ID from database.
 
@@ -293,7 +293,7 @@ async def get_shows_from_db(
     return f'{msg}{total}'
 
 
-async def setup_database() -> tuple[async_sessionmaker, Dict[str, Any]]:
+async def setup_database() -> tuple[async_sessionmaker, dict[str, Any]]:
     """
     Configures database connection and returns session maker.
 

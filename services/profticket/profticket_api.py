@@ -1,11 +1,15 @@
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 from fake_useragent import UserAgent
-from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
-                      wait_exponential)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from config import settings
 
@@ -162,8 +166,8 @@ class ProfticketsInfo:
             raise ValueError('Company ID is required')
 
         self.com_id = com_id
-        self.month: Optional[int] = None
-        self.year: Optional[int] = None
+        self.month: int | None = None
+        self.year: int | None = None
 
         # proxies = {'http://': self.PROXY_URL, 'https://': self.PROXY_URL}
 
@@ -183,8 +187,8 @@ class ProfticketsInfo:
             verify=False,
         )
         self._request_semaphore = asyncio.Semaphore(concurrent_requests)
-        self._show_cache: Dict[str, Dict[str, Any]] = {}
-        self.free_places: Dict[str, int] = {}
+        self._show_cache: dict[str, dict[str, Any]] = {}
+        self.free_places: dict[str, int] = {}
 
     def set_date(self, month: int, year: int) -> None:
         """
@@ -232,7 +236,7 @@ class ProfticketsInfo:
         logger.debug(f'Created URL for page {page_num}: {url}')
         return url
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """
         Generate HTTP headers for a request with dynamic User-Agent,
         and static Accept,
@@ -315,7 +319,7 @@ class ProfticketsInfo:
                 logger.error(f'Request error: {str(e)}')
                 raise ProfticketAPIError(f'Request error: {str(e)}')
 
-    async def _load_data(self) -> List[dict]:
+    async def _load_data(self) -> list[dict]:
         """
         Loads data asynchronously from a paginated API endpoint.
 
@@ -471,7 +475,7 @@ class ProfticketsInfo:
             f'?eventsIds%5B%5D={event_id}&language=ru-RU'
         )
 
-    async def _get_show_details(self, show_id: str) -> Dict[str, Any]:
+    async def _get_show_details(self, show_id: str) -> dict[str, Any]:
         """
         Fetches and returns the detailed information of a show, optionally
         using cached data.
@@ -514,7 +518,7 @@ class ProfticketsInfo:
             )
             return {'actors': [''], 'details': {}}
 
-    async def collect_full_info(self) -> Dict[str, Any]:
+    async def collect_full_info(self) -> dict[str, Any]:
         """
         Collects detailed information about events and shows.
 
@@ -552,7 +556,7 @@ class ProfticketsInfo:
 
             batch_size = 5
             for i in range(0, len(show_tasks), batch_size):
-                batch = show_tasks[i: i + batch_size]
+                batch = show_tasks[i : i + batch_size]
                 if batch:
                     await asyncio.gather(*batch)
                     await asyncio.sleep(0.5)

@@ -14,9 +14,14 @@ from telegram.middlewares.db import DbSessionMiddleware
 from telegram.middlewares.logging_to_db import UserLoggingMiddleware
 from telegram.middlewares.profticket import ProfticketSessionMiddleware
 from telegram.middlewares.throttling import ThrottlingMiddleware
-from telegram.utils.startup import (get_token, handle_signals, on_shutdown,
-                                    on_startup, setup_dispatcher,
-                                    setup_logging)
+from telegram.utils.startup import (
+    get_token,
+    handle_signals,
+    on_shutdown,
+    on_startup,
+    setup_dispatcher,
+    setup_logging,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +30,9 @@ async def main() -> None:
     """Main application entry point."""
     setup_logging()
 
-    bot = Bot(token=get_token(),
-              default=DefaultBotProperties(parse_mode='HTML'))
+    bot = Bot(
+        token=get_token(), default=DefaultBotProperties(parse_mode='HTML')
+    )
     dp = await setup_dispatcher()
 
     session_pool, context_data = await setup_database()

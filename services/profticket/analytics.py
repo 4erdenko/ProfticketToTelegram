@@ -45,8 +45,8 @@ import json
 import logging
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 import pytz
@@ -84,8 +84,8 @@ MONTHS_RU = {
 def filter_data_by_period(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int],
-    year: Optional[int],
+    month: int | None,
+    year: int | None,
     include_past_shows: bool = False,
 ) -> tuple[list[Show], dict[str, list[ShowSeatHistory]]]:
     """
@@ -146,7 +146,7 @@ def get_net_sales_and_returns(
     sorted_hist = sorted(hist, key=lambda r: r.timestamp)
     sold = returned = 0
 
-    for prev, curr in zip(sorted_hist, sorted_hist[1:]):
+    for prev, curr in zip(sorted_hist, sorted_hist[1:], strict=False):
         diff = prev.seats - curr.seats
         if diff > 0:
             sold += diff
@@ -159,10 +159,10 @@ def get_net_sales_and_returns(
 def top_shows_by_sales(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
-) -> List[Tuple[str, int, str]]:
+) -> list[tuple[str, int, str]]:
     """Топ шоу по gross продажам (обратная совместимость)"""
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year
@@ -196,7 +196,7 @@ def top_shows_by_sales(
 
 def calculate_current_sales_rate(
     history: Sequence[ShowSeatHistory], lookback_hours: int = 24
-) -> Optional[float]:
+) -> float | None:
     """
     Расчёт текущей скорости продаж с учётом последних N часов
     и взвешиванием по времени (более свежие данные важнее)
@@ -221,7 +221,7 @@ def calculate_current_sales_rate(
     rates = []
     weights = []
 
-    for prev, curr in zip(recent_records, recent_records[1:]):
+    for prev, curr in zip(recent_records, recent_records[1:], strict=False):
         dt = curr.timestamp - prev.timestamp
         if dt < 300:  # Игнорируем интервалы менее 5 минут
             continue
@@ -246,11 +246,11 @@ def calculate_current_sales_rate(
 def top_shows_by_current_sales_speed(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
     include_past_shows: bool = True,
-) -> List[Tuple[str, float, str]]:
+) -> list[tuple[str, float, str]]:
     """
     Топ шоу по текущей скорости продаж
 
@@ -290,9 +290,9 @@ def top_shows_by_current_sales_speed(
 
 def predict_sold_out_advanced(
     history: Sequence[ShowSeatHistory],
-    show_dt: Optional[datetime] = None,
-    now_ts: Optional[int] = None,
-) -> Optional[int]:
+    show_dt: datetime | None = None,
+    now_ts: int | None = None,
+) -> int | None:
     """
     Улучшенное предсказание sold-out с учётом тренда
     и адаптивной оценкой скорости
@@ -377,10 +377,10 @@ def predict_sold_out_advanced(
 def shows_predicted_to_sell_out_soonest(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
-) -> List[Tuple[str, int, str, str]]:
+) -> list[tuple[str, int, str, str]]:
     """Шоу, которые прогнозируются к sold-out в ближайшее время"""
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year
@@ -423,7 +423,7 @@ def shows_predicted_to_sell_out_soonest(
     return predictions[:n]
 
 
-def parse_show_date(date_str: str) -> Optional[datetime]:
+def parse_show_date(date_str: str) -> datetime | None:
     """Парсинг даты шоу из разных форматов"""
     try:
         return datetime.fromisoformat(date_str)
@@ -457,11 +457,11 @@ def parse_show_date(date_str: str) -> Optional[datetime]:
 def top_shows_by_returns(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> List[Tuple[str, int, str]]:
+) -> list[tuple[str, int, str]]:
     """Топ шоу по количеству возвратов"""
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year, include_past_shows=include_past_shows
@@ -494,11 +494,11 @@ def top_shows_by_returns(
 def top_shows_by_return_rate(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> List[Tuple[str, float, str]]:
+) -> list[tuple[str, float, str]]:
     """Топ шоу по проценту возвратов"""
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year, include_past_shows=include_past_shows
@@ -552,11 +552,11 @@ def top_shows_by_return_rate(
 def top_artists_by_sales(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> List[Tuple[str, int]]:
+) -> list[tuple[str, int]]:
     """Топ артистов по net продажам (продажи минус возвраты)"""
     filtered_shows, history_buckets = filter_data_by_period(
         shows, histories, month, year, include_past_shows=include_past_shows
@@ -614,8 +614,8 @@ def top_artists_by_sales(
 def calendar_pace_dashboard(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 10,  # Добавляем для совместимости API (не используется)
     include_past_shows: bool = False,
 ) -> dict:
@@ -653,9 +653,9 @@ def calendar_pace_dashboard(
         show_date = show.date
         date_groups[show_date]['shows'].append(show.show_name)
         date_groups[show_date]['total_gross'] += sold  # Gross = все продажи
-        date_groups[show_date][
-            'total_net'
-        ] += net_sales_amount  # Net = продажи - возвраты
+        date_groups[show_date]['total_net'] += (
+            net_sales_amount  # Net = продажи - возвраты
+        )
         date_groups[show_date]['total_refunds'] += returned
         date_groups[show_date]['histories'].extend(h_rows)
 
@@ -695,7 +695,7 @@ def show_financial_summary(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
     n: int = 10,  # Добавляем для совместимости API (не используется)
-) -> Optional[dict]:
+) -> dict | None:
     """
     Финансовая сводка по конкретному шоу
     Показывает gross/net для бухгалтерии и маркетинга
@@ -768,11 +768,11 @@ def show_financial_summary(
 def top_shows_by_sales_detailed(
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    month: Optional[int] = None,
-    year: Optional[int] = None,
+    month: int | None = None,
+    year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> List[Tuple[str, int, int, str]]:
+) -> list[tuple[str, int, int, str]]:
     """
     Топ шоу по продажам с детализацией gross/net
     Возвращает: (name, gross_sales, net_sales, id)
