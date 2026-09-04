@@ -64,7 +64,7 @@ jobs:
 
   build-push:
     runs-on: ubuntu-latest
-    needs: build-test
+    needs: [ruff, build-test]
     steps:
       -
         name: Checkout
@@ -87,7 +87,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:${{ github.sha }}
   deploy:
     needs: build-push
     runs-on: ubuntu-latest
@@ -103,7 +105,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.HOST_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,docker-compose.mosbilet.yml"
           target: "${{ secrets.FOLDER_PATH }}"
 
       - name: Executing remote ssh commands to deploy
@@ -114,10 +116,21 @@ jobs:
           username: ${{ secrets.HOST_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd ${{ secrets.FOLDER_PATH }}
-            cat <<EOF > .env
+            set -eu
+            cd '${{ secrets.FOLDER_PATH }}'
+            test -s .my_local_dev/mosbilet-proxy/bot.env
+            umask 077
+            cat <<'EOF' > .env
             ${{ secrets.ENV }}
             EOF
-            sudo docker compose up -d
-            sudo docker compose exec profticket_bot_service alembic upgrade head
+            compose() {
+              sudo env MOSBILET_BOT_IMAGE='${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:${{ github.sha }}' \
+                docker compose --env-file .env \
+                --env-file .my_local_dev/mosbilet-proxy/bot.env \
+                -f docker-compose.yml -f docker-compose.mosbilet.yml "$@"
+            }
+            compose config --quiet
+            compose pull profticket_bot_service
+            compose up -d --no-deps profticket_bot_service
+            compose exec -T profticket_bot_service alembic upgrade head
             sudo docker image prune -f

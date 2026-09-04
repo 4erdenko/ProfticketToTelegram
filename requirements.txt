@@ -1,5 +1,6 @@
 aiogram==3.22.0
-httpx==0.28.1
+httpx[socks]==0.28.1
+beautifulsoup4==4.13.5
 pymorphy2==0.9.1
 pytz==2025.2
 SQLAlchemy==2.0.43

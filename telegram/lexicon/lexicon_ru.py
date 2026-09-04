@@ -1,5 +1,12 @@
 from config import settings
 
+INVENTORY_UNKNOWN = 'Наличие и начало продаж — на сайте'
+PERFORMANCE_FALLBACKS = {
+    'name': 'Название не указано',
+    'date': 'Дата уточняется',
+    'inventory': 'Наличие билетов неизвестно',
+}
+
 LEXICON_MONTHS_RU: dict[str, str] = {
     'January': 'Январь',
     'February': 'Февраль',

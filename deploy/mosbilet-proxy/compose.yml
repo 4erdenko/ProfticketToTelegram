@@ -1,0 +1,26 @@
+services:
+  mosbilet-proxy:
+    build: .
+    restart: unless-stopped
+    init: true
+    ports:
+      - '${MOSBILET_PROXY_BIND_IP:?Set the Russian host bind IP}:3129:3129'
+    volumes:
+      - type: bind
+        source: ${MOSBILET_PROXY_SECRETS_DIR:?Set the absolute secrets directory}
+        target: /run/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'

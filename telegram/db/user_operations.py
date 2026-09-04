@@ -16,7 +16,7 @@ from config import settings
 from telegram.db import User
 from telegram.db.models import Show
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS, LEXICON_MONTHS_RU
-from telegram.tg_utils import parse_show_date
+from telegram.tg_utils import get_result_message, parse_show_date
 
 logger = logging.getLogger(__name__)
 
@@ -67,40 +67,6 @@ def get_three_months() -> tuple:
     return tuple(months)
 
 
-def get_result_message(
-    seats: int, previous_seats: int, show_name: str, date: str, buy_link: str
-) -> str:
-    """
-    Function to create a message with information about a performance.
-
-    Args:
-        seats: Number of available seats
-        previous_seats: Number of seats from previous update
-        show_name: Name of the performance
-        date: Date of the performance
-        buy_link: Ticket purchase link
-
-    Returns:
-        str: Formatted message with show information
-    """
-    if seats == 0:
-        seats_text = '<code>SOLD OUT</code>'
-    else:
-        seats_text = f'Билетов: <a href="{buy_link}">{seats}</a>'
-
-    seats_diff = ''
-    if previous_seats is not None and seats != previous_seats:
-        diff = seats - previous_seats
-        seats_diff = f' ({diff} 🔻)' if diff < 0 else f' (+{diff} 🔺)'
-
-    return (
-        f'📅<strong> {date}</strong>\n'
-        f'💎 {show_name}\n'
-        f'🎫 {seats_text}{seats_diff}\n'
-        '------------------------\n'
-    )
-
-
 async def get_available_months(session: AsyncSession) -> list:
     """
     Get available months that have show data.
@@ -125,7 +91,6 @@ async def get_available_months(session: AsyncSession) -> list:
             .where(
                 Show.month == month_number,
                 Show.year == year,
-                Show.seats > 0,
                 ~Show.is_deleted,
             )
             .limit(1)

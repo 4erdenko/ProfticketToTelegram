@@ -1,10 +1,12 @@
 import asyncio
+import contextlib
 import logging
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 
 from config import settings
+from services.ermolova import ErmolovaInfo
 from services.profticket.profticket_api import ProfticketsInfo
 from services.profticket.profticket_snapshoter import ShowUpdateService
 from telegram.db.user_operations import setup_database
@@ -37,7 +39,14 @@ async def main() -> None:
 
     session_pool, context_data = await setup_database()
 
-    profticket = ProfticketsInfo(settings.COM_ID)
+    profticket = (
+        ErmolovaInfo(
+            settings.MOSBILET_PROXY_URL,
+            proxy_ca_file=settings.MOSBILET_PROXY_CA_FILE,
+        )
+        if settings.SCHEDULE_SOURCE == 'ermolova'
+        else ProfticketsInfo(settings.COM_ID)
+    )
     logger.info(LEXICON_LOGS['PROFTICKET_INITIALIZED'])
 
     dp.update.middleware(DbSessionMiddleware(session_pool=session_pool))
@@ -52,6 +61,7 @@ async def main() -> None:
         bot,
     )
 
+    update_task = None
     try:
         update_task = asyncio.create_task(show_update_service.update_loop())
         await on_startup(bot, settings.ADMIN_ID)
@@ -62,7 +72,17 @@ async def main() -> None:
         logger.exception(LEXICON_LOGS['BOT_ERROR'].format(str(e)))
         raise
     finally:
-        await on_shutdown(bot, settings.ADMIN_ID, update_task)
+        if update_task is not None:
+            update_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await update_task
+        try:
+            await on_shutdown(bot, settings.ADMIN_ID, update_task)
+        finally:
+            if isinstance(profticket, ErmolovaInfo):
+                await profticket.aclose()
+            else:
+                await profticket.client.aclose()
 
 
 if __name__ == '__main__':

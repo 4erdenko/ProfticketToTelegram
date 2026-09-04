@@ -4,11 +4,14 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from services.ermolova import ErmolovaInfo
 from services.profticket.profticket_api import ProfticketsInfo
 
 
 class ProfticketSessionMiddleware(BaseMiddleware):
-    def __init__(self, profitcket_object: ProfticketsInfo):
+    def __init__(
+        self, profitcket_object: ProfticketsInfo | ErmolovaInfo
+    ) -> None:
         super().__init__()
         self.profticket_object = profitcket_object
 
