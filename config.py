@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     PROXY_URL: str
     SCHEDULE_SOURCE: Literal['ermolova', 'profticket'] = 'ermolova'
     MOSBILET_PROXY_URL: str = ''
+    MOSBILET_PROXY_CA_FILE: str = ''
     # Show Update Service
     UPDATE_INTERVAL: int = 1800  # 30 минут
     ERROR_RETRY_INTERVAL: int = 60

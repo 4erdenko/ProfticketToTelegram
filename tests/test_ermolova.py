@@ -170,6 +170,17 @@ def test_message_handles_each_nullable_field(field: str) -> None:
     assert '(-2' in message
 
 
+@pytest.mark.parametrize('url', ['', 'http://proxy:3128', 'socks5://proxy:1080'])
+def test_proxy_ca_requires_https(url: str) -> None:
+    with pytest.raises(ValueError, match='HTTPS proxy'):
+        ErmolovaInfo(url, proxy_ca_file='missing.crt')
+
+
+def test_proxy_ca_missing_file_fails_closed() -> None:
+    with pytest.raises(FileNotFoundError):
+        ErmolovaInfo('https://proxy:3129', proxy_ca_file='missing.crt')
+
+
 def test_complete_collection_and_failed_inventory() -> None:
     async def check() -> None:
         source = ErmolovaInfo()

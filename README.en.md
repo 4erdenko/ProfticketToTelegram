@@ -144,6 +144,12 @@ License — MIT (see `LICENSE`). For support, check `ADMIN_USERNAME` in `.env`.
 
 ## Ermolova / Mosbilet source
 
+For a persistent direct Russian egress without an SSH tunnel, use the separate
+HTTPS proxy in `deploy/mosbilet-proxy` and `docker-compose.mosbilet.yml` on the
+bot host. `MOSBILET_PROXY_CA_FILE` trusts the proxy certificate only; destination
+TLS verification still uses the default trust store. See the deployment guide
+in `deploy/mosbilet-proxy/README.md` for credentials, IP ACLs and certificate renewal.
+
 The default `SCHEDULE_SOURCE=ermolova` reads the official theatre schedule and
 cast, then obtains `available_tickets` from Mosbilet. Set
 `SCHEDULE_SOURCE=profticket` to explicitly select the legacy provider.

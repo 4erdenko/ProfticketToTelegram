@@ -40,7 +40,10 @@ async def main() -> None:
     session_pool, context_data = await setup_database()
 
     profticket = (
-        ErmolovaInfo(settings.MOSBILET_PROXY_URL)
+        ErmolovaInfo(
+            settings.MOSBILET_PROXY_URL,
+            proxy_ca_file=settings.MOSBILET_PROXY_CA_FILE,
+        )
         if settings.SCHEDULE_SOURCE == 'ermolova'
         else ProfticketsInfo(settings.COM_ID)
     )

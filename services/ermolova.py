@@ -4,6 +4,7 @@ import asyncio
 import calendar
 import hashlib
 import re
+import ssl
 from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
@@ -131,14 +132,26 @@ def parse_inventory(data: Any) -> dict[str, int | None]:
 
 
 class ErmolovaInfo:
-    def __init__(self, proxy_url: str = '', timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        proxy_url: str = '',
+        timeout: float = 20.0,
+        *,
+        proxy_ca_file: str = '',
+    ) -> None:
+        proxy = proxy_url or None
+        if proxy_ca_file:
+            if not proxy_url.startswith('https://'):
+                raise ValueError('Proxy CA requires an HTTPS proxy URL')
+            proxy_context = ssl.create_default_context(cafile=proxy_ca_file)
+            proxy = httpx.Proxy(proxy_url, ssl_context=proxy_context)
         self.month: int | None = None
         self.year: int | None = None
         self.client = httpx.AsyncClient(
             timeout=timeout, follow_redirects=True, trust_env=False
         )
         self.inventory_client = httpx.AsyncClient(
-            proxy=proxy_url or None, timeout=timeout, trust_env=False
+            proxy=proxy, timeout=timeout, trust_env=False
         )
         self._semaphore = asyncio.Semaphore(3)
 

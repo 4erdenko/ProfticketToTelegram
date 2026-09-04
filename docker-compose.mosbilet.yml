@@ -1,0 +1,16 @@
+services:
+  profticket_bot_service:
+    build: .
+    image: profticket-to-tg:mosbilet
+    pull_policy: build
+    environment:
+      SCHEDULE_SOURCE: ermolova
+      MOSBILET_PROXY_URL: ${MOSBILET_PROXY_URL:?Set the authenticated HTTPS proxy URL}
+      MOSBILET_PROXY_CA_FILE: /run/secrets/mosbilet-proxy.crt
+    volumes:
+      - type: bind
+        source: ${MOSBILET_PROXY_CA_HOST_FILE:?Set the absolute proxy certificate path}
+        target: /run/secrets/mosbilet-proxy.crt
+        read_only: true
+        bind:
+          create_host_path: false
