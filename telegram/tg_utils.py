@@ -1,13 +1,18 @@
 import asyncio
 import string
 from datetime import datetime
+from html import escape
 
 import pytz
 from aiogram.types import Message
 from dateutil.relativedelta import relativedelta
 
 from config import settings
-from telegram.lexicon.lexicon_ru import LEXICON_MONTHS_RU
+from telegram.lexicon.lexicon_ru import (
+    INVENTORY_UNKNOWN,
+    LEXICON_MONTHS_RU,
+    PERFORMANCE_FALLBACKS,
+)
 
 MONTHS_GENITIVE_RU = {
     'января': 1,
@@ -72,8 +77,14 @@ def get_three_months():
     return tuple(months)
 
 
-def parse_show_date(date_str: str) -> datetime:
+def parse_show_date(date_str: str | None) -> datetime:
     """Parse a Russian formatted show date."""
+    if date_str is None:
+        return datetime.min
+    try:
+        return datetime.strptime(date_str, '%d.%m.%Y, %H:%M')
+    except ValueError:
+        pass
     try:
         date_part, _, time_part = date_str.partition(',')
         day_str, month_ru, year_str = date_part.strip().split()
@@ -90,7 +101,13 @@ def parse_show_date(date_str: str) -> datetime:
         return datetime.min
 
 
-def get_result_message(seats, previous_seats, show_name, date, buy_link):
+def get_result_message(
+    seats: int | None,
+    previous_seats: int | None,
+    show_name: str | None,
+    date: str | None,
+    buy_link: str | None,
+) -> str:
     """
     Function to create a message with information about a performance.
 
@@ -102,13 +119,29 @@ def get_result_message(seats, previous_seats, show_name, date, buy_link):
         buy_link (str): Ticket purchase link.
 
     """
-    if seats == 0:
+    buy_link = escape((buy_link or '').strip(), quote=True)
+    show_name = escape(show_name or PERFORMANCE_FALLBACKS['name'])
+    date = escape(date or PERFORMANCE_FALLBACKS['date'])
+    if seats is None:
+        seats_text = (
+            f'<a href="{buy_link}">{INVENTORY_UNKNOWN}</a>'
+            if buy_link
+            else PERFORMANCE_FALLBACKS['inventory']
+        )
+    elif seats == 0:
         seats_text = '<code>SOLD OUT</code>'
     else:
-        seats_text = f'Билетов: <a href="{buy_link}">{seats}</a>'
+        seats_value = (
+            f'<a href="{buy_link}">{seats}</a>' if buy_link else str(seats)
+        )
+        seats_text = f'Билетов: {seats_value}'
 
     seats_diff = ''
-    if previous_seats is not None and seats != previous_seats:
+    if (
+        seats is not None
+        and previous_seats is not None
+        and seats != previous_seats
+    ):
         diff = seats - previous_seats
         seats_diff = f' ({diff} 🔻)' if diff < 0 else f' (+{diff} 🔺)'
 

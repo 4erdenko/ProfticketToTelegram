@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -98,6 +99,122 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
             row = history[0]
             self.assertEqual(row.show_id, 'e1')
             self.assertEqual(row.seats, 5)
+
+    async def test_unknown_inventory_and_sales_opening(self) -> None:
+        from services.ermolova import parse_schedule
+        from tests.test_ermolova import schedule_html
+
+        event = parse_schedule(schedule_html(link=''), 9, 2026)[0]
+        event.update(image=None, annotation=None, actors=['First Actor'])
+        source = DummyProfticket({event['id']: event})
+        service = ShowUpdateService(self.Session, source, DummyBot())
+        async with FakeAsyncSession(self.Session()) as session:
+            await session.execute(
+                Show.__table__.insert().values(
+                    id='legacy',
+                    show_id=230,
+                    seats=5,
+                    month=7,
+                    year=2026,
+                    is_deleted=False,
+                )
+            )
+            await session.commit()
+            self.assertTrue(await service._update_month_data(session, 9, 2026))
+            histories = (
+                (await session.execute(select(ShowSeatHistory)))
+                .scalars()
+                .all()
+            )
+            self.assertEqual(histories, [])
+            saved = (
+                await session.execute(
+                    select(Show).where(Show.id == event['id'])
+                )
+            ).scalar_one()
+            self.assertIsNone(saved.seats)
+            event['seats'] = 78
+            event['buy_link'] += '#mosbilet123'
+            self.assertTrue(await service._update_month_data(session, 9, 2026))
+            session._session.expire_all()
+            saved = (
+                await session.execute(
+                    select(Show).where(Show.id == event['id'])
+                )
+            ).scalar_one()
+            self.assertEqual(saved.seats, 78)
+            self.assertIsNone(saved.previous_seats)
+            histories = (
+                (await session.execute(select(ShowSeatHistory)))
+                .scalars()
+                .all()
+            )
+            self.assertEqual([h.seats for h in histories], [78])
+            legacy = (
+                await session.execute(select(Show).where(Show.id == 'legacy'))
+            ).scalar_one()
+            self.assertEqual(legacy.seats, 5)
+            self.assertFalse(legacy.is_deleted)
+
+    async def test_failure_preserves_rows_and_alerts_once_per_month(
+        self,
+    ) -> None:
+        from services.profticket.profticket_snapshoter import settings
+
+        source = DummyProfticket({})
+        service = ShowUpdateService(self.Session, source, DummyBot())
+        service._notify_admin = AsyncMock()
+        with patch.object(settings, 'MAX_CONSECUTIVE_ERRORS', 3, create=True):
+            async with FakeAsyncSession(self.Session()) as session:
+                await session.execute(
+                    Show.__table__.insert().values(
+                        id='saved',
+                        show_id=-230,
+                        seats=78,
+                        month=9,
+                        year=2026,
+                        is_deleted=False,
+                    )
+                )
+                await session.commit()
+                for _ in range(4):
+                    self.assertFalse(
+                        await service._update_month_data(session, 9, 2026)
+                    )
+                service._notify_admin.assert_awaited_once()
+                saved = (await session.execute(select(Show))).scalar_one()
+                self.assertEqual(saved.seats, 78)
+                self.assertFalse(saved.is_deleted)
+                self.assertEqual(service.month_errors[(2026, 9)], 4)
+
+    async def test_partial_database_write_is_rolled_back(self) -> None:
+        from services.ermolova import parse_schedule
+        from services.profticket.profticket_snapshoter import settings
+        from tests.test_ermolova import schedule_html
+
+        event = parse_schedule(schedule_html(), 9, 2026)[0]
+        event.update(image=None, annotation=None, actors=[], seats=78)
+        source = DummyProfticket({event['id']: event})
+        service = ShowUpdateService(self.Session, source, DummyBot())
+        with patch.object(settings, 'MAX_CONSECUTIVE_ERRORS', 3, create=True):
+            async with FakeAsyncSession(self.Session()) as session:
+                self.assertTrue(
+                    await service._update_month_data(session, 9, 2026)
+                )
+                event['seats'] = 10
+                source.data['invalid'] = {}
+                self.assertFalse(
+                    await service._update_month_data(session, 9, 2026)
+                )
+                saved = (await session.execute(select(Show))).scalar_one()
+                self.assertEqual(saved.seats, 78)
+                self.assertFalse(saved.is_deleted)
+                histories = (
+                    (await session.execute(select(ShowSeatHistory)))
+                    .scalars()
+                    .all()
+                )
+                self.assertEqual([h.seats for h in histories], [78])
 
     def test_calculate_average_sales_rate_for_show(self):
         history_s1 = [

@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 from pydantic_settings import BaseSettings
 
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     STOP_AFTER_ATTEMPT: int = 5
     WAIT_FIXED: int = 3
     PROXY_URL: str
+    SCHEDULE_SOURCE: Literal['ermolova', 'profticket'] = 'ermolova'
+    MOSBILET_PROXY_URL: str = ''
     # Show Update Service
     UPDATE_INTERVAL: int = 1800  # 30 минут
     ERROR_RETRY_INTERVAL: int = 60

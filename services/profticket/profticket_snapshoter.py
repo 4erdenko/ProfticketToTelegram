@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
+from services.ermolova import ErmolovaInfo
 from services.profticket.profticket_api import ProfticketsInfo
 from telegram.db.models import Show, ShowSeatHistory
 
@@ -19,11 +20,16 @@ timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
 
 
 class ShowUpdateService:
-    def __init__(self, session_maker, profticket: ProfticketsInfo, bot: Bot):
+    def __init__(
+        self,
+        session_maker,
+        profticket: ProfticketsInfo | ErmolovaInfo,
+        bot: Bot,
+    ) -> None:
         self.session_maker = session_maker
         self.profticket = profticket
         self.bot = bot
-        self.consecutive_errors = 0
+        self.month_errors: dict[tuple[int, int], int] = {}
 
     async def _notify_admin(self, message: str):
         """Send a notification to the admin"""
@@ -56,8 +62,7 @@ class ShowUpdateService:
             self.profticket.set_date(month, year)
             shows = await self.profticket.collect_full_info()
             if not shows:
-                logger.warning(f'No data available for {month}/{year}')
-                return False
+                raise ValueError(f'No verified data for {month}/{year}')
 
             current_time = int(datetime.now(timezone).timestamp())
 
@@ -82,14 +87,26 @@ class ShowUpdateService:
                     'scene': show_data['scene'],
                     'show_name': show_data['show_name'],
                     'date': show_data['date'],
-                    'duration': str(show_data['duration']),
-                    'age': str(show_data['age']),
-                    'seats': int(show_data['seats'] or 0),
-                    'previous_seats': current_shows_dict.get(event_id),
+                    'duration': str(show_data['duration'])
+                    if show_data['duration'] is not None
+                    else None,
+                    'age': str(show_data['age'])
+                    if show_data['age'] is not None
+                    else None,
+                    'seats': int(show_data['seats'])
+                    if show_data['seats'] is not None
+                    else None,
+                    'previous_seats': current_shows_dict.get(event_id)
+                    if show_data['seats'] is not None
+                    else None,
                     'image': show_data['image'],
                     'annotation': show_data['annotation'],
-                    'min_price': int(show_data['min_price'] or 0),
-                    'max_price': int(show_data['max_price'] or 0),
+                    'min_price': int(show_data['min_price'])
+                    if show_data['min_price'] is not None
+                    else None,
+                    'max_price': int(show_data['max_price'])
+                    if show_data['max_price'] is not None
+                    else None,
                     'pushkin': bool(show_data['pushkin']),
                     'buy_link': show_data['buy_link'],
                     'actors': json.dumps(
@@ -109,13 +126,14 @@ class ShowUpdateService:
                 )
                 await session.execute(stmt)
 
-                await session.execute(
-                    insert(ShowSeatHistory).values(
-                        show_id=event_id,
-                        timestamp=current_time,
-                        seats=show_values['seats'],
+                if show_values['seats'] is not None:
+                    await session.execute(
+                        insert(ShowSeatHistory).values(
+                            show_id=event_id,
+                            timestamp=current_time,
+                            seats=show_values['seats'],
+                        )
                     )
-                )
 
             # Мягко удаляем устаревшие записи
             all_event_ids = list(shows.keys())
@@ -131,21 +149,23 @@ class ShowUpdateService:
             )
 
             await session.commit()
-            self.consecutive_errors = 0
+            self.month_errors.pop((year, month), None)
             logger.info(f'Show data for {month}/{year} has been updated')
             return True
 
         except Exception as e:
             logger.error(f'Error updating data for {month}/{year}: {e}')
             await session.rollback()
-            self.consecutive_errors += 1
+            key = (year, month)
+            self.month_errors[key] = self.month_errors.get(key, 0) + 1
+            error_count = self.month_errors[key]
 
-            if self.consecutive_errors >= settings.MAX_CONSECUTIVE_ERRORS:
+            if error_count == settings.MAX_CONSECUTIVE_ERRORS:
                 await self._notify_admin(
                     f'❗️ Critical error during data update!\n'
                     f'Month: {month}/{year}\n'
                     f'Error: {str(e)}\n'
-                    f'Consecutive error count: {self.consecutive_errors}'
+                    f'Consecutive error count: {error_count}'
                 )
 
             return False

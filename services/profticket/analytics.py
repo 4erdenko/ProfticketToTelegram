@@ -543,8 +543,14 @@ def shows_predicted_to_sell_out_soonest(
     return predictions[:n]
 
 
-def parse_show_date(date_str: str) -> datetime | None:
-    """Парсинг даты шоу из разных форматов"""
+def parse_show_date(date_str: str | None) -> datetime | None:
+    """Parse current numeric dates and legacy Profticket dates."""
+    if date_str is None:
+        return None
+    try:
+        return datetime.strptime(date_str, '%d.%m.%Y, %H:%M')
+    except ValueError:
+        pass
     try:
         return datetime.fromisoformat(date_str)
     except Exception:

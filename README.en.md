@@ -140,3 +140,32 @@ Before submitting a PR:
 ## License & contact
 
 License — MIT (see `LICENSE`). For support, check `ADMIN_USERNAME` in `.env`.
+
+
+## Ermolova / Mosbilet source
+
+The default `SCHEDULE_SOURCE=ermolova` reads the official theatre schedule and
+cast, then obtains `available_tickets` from Mosbilet. Set
+`SCHEDULE_SOURCE=profticket` to explicitly select the legacy provider.
+
+Configure `MOSBILET_PROXY_URL` in `.env` if Mosbilet requires Russian egress.
+HTTP CONNECT and SOCKS5 proxies are supported. For a local SSH tunnel:
+
+```sh
+ssh -N -D 127.0.0.1:18080 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 ru-server
+```
+
+Use `MOSBILET_PROXY_URL=socks5h://127.0.0.1:18080` while that tunnel is running.
+For Docker, use an endpoint reachable from inside the container; its loopback
+is not the host loopback. Keep proxy credentials out of Git. Only Mosbilet
+requests use this proxy; TLS verification remains enabled.
+
+Unknown inventory is displayed as a link to the theatre and is never saved as
+zero seat history. Months remain visible before sales open. Failed or unverified
+empty refreshes preserve the previous monthly snapshot and alert once after
+three failures for that month, resetting after a successful refresh.
+
+New performances use `ermolova:` IDs and negative website show IDs, separate from
+legacy Profticket history. No database migration is required. New sales analytics
+need new observations; missing historical observations cannot be reconstructed.
+Published casts can include alternate performers rather than a date-specific cast.

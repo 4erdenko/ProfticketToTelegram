@@ -1,4 +1,5 @@
 venv
+.my_local_dev/
 .env
 .github
 .idea

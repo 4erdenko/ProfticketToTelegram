@@ -27,11 +27,11 @@ async def collect_shows_info(
 
         date = item['date']
         show_name = item['show_name'].strip()
-        seats = int(item['seats'])
+        seats = item['seats']
         buy_link = item['buy_link']
 
         show_count += 1
-        msg += get_result_message(seats, show_name, date, buy_link)
+        msg += get_result_message(seats, None, show_name, date, buy_link)
 
     if show_count == 0:
         return LEXICON_RU['NONE_SHOWS_THIS_MONTH']
