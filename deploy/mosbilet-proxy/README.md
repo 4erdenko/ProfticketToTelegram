@@ -51,27 +51,36 @@ UID 13 — пользователь `proxy` в образе Debian. Катало
 Передайте **только публичный** `proxy.crt` по доверенному SSH-соединению на
 сервер бота в `/opt/profticket_bot/.my_local_dev/mosbilet-proxy/proxy.crt`.
 Обеспечьте чтение сертификата UID 10001 контейнера бота. Приватный ключ
-остаётся на российском сервере. Добавьте в `.env` сервера бота:
+остаётся на российском сервере. Создайте файл
+`/opt/profticket_bot/.my_local_dev/mosbilet-proxy/bot.env` с правами `600`:
 
 ```dotenv
 MOSBILET_PROXY_URL=https://mosbilet:URL_ENCODED_PASSWORD@185.11.246.62:3129
 MOSBILET_PROXY_CA_HOST_FILE=/opt/profticket_bot/.my_local_dev/mosbilet-proxy/proxy.crt
 ```
 
-Пароль в URL должен быть percent-encoded. Override собирает образ бота
-из текущего checkout и не использует старый опубликованный образ,
-не поддерживающий `MOSBILET_PROXY_CA_FILE`. Сначала проверьте конфигурацию, затем применяйте
-оба Compose-файла при запуске и последующих обновлениях:
+Пароль в URL должен быть percent-encoded. Этот файл и сертификат хранятся
+на сервере и не перезаписываются workflow. Общий `.env` по-прежнему обновляется
+из GitHub Secret `ENV`. Не добавляйте параметры прокси в этот общий секрет.
+
+Workflow доставляет оба Compose-файла и выбирает образ с тегом SHA текущего
+коммита, опубликованный после проверок. Override требует явного тега образа
+и не собирает код на сервере. Для ручного запуска из каталога репозитория
+укажите опубликованный тег вместо `COMMIT_SHA` и применяйте оба файла:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.mosbilet.yml config --quiet
-docker compose -f docker-compose.yml -f docker-compose.mosbilet.yml up -d --build --no-deps profticket_bot_service
+export MOSBILET_BOT_IMAGE=4erdenko/profticket_to_tg:COMMIT_SHA
+docker compose --env-file .env --env-file .my_local_dev/mosbilet-proxy/bot.env -f docker-compose.yml -f docker-compose.mosbilet.yml config --quiet
+docker compose --env-file .env --env-file .my_local_dev/mosbilet-proxy/bot.env -f docker-compose.yml -f docker-compose.mosbilet.yml up -d --no-deps profticket_bot_service
 ```
 
 Override принудительно выбирает источник `ermolova`, монтирует сертификат
 только для чтения и передаёт настройки прокси. Пустой URL или отсутствующий
 файл сертификата приводят к ошибке запуска, а не к незаметному прямому выходу.
 Обычный Compose без override сохраняет прежнюю возможность прямого доступа.
+Перед первым деплоем должны быть запущены PostgreSQL и российский прокси:
+workflow обновляет только бот и не пересоздаёт БД. При отсутствии `bot.env`
+деплой останавливается до изменения контейнера.
 
 ## Проверка после установки
 

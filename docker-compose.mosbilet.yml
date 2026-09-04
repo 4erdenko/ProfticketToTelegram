@@ -1,8 +1,7 @@
 services:
   profticket_bot_service:
-    build: .
-    image: profticket-to-tg:mosbilet
-    pull_policy: build
+    image: ${MOSBILET_BOT_IMAGE:?Set the tested bot image tag}
+    pull_policy: always
     environment:
       SCHEDULE_SOURCE: ermolova
       MOSBILET_PROXY_URL: ${MOSBILET_PROXY_URL:?Set the authenticated HTTPS proxy URL}
