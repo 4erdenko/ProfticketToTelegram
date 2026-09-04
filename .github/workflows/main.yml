@@ -23,11 +23,13 @@ jobs:
       - name: Ruff lint (PR annotations)
         uses: astral-sh/ruff-action@v3
         with:
+          version: "0.12.10"
           args: "check --output-format=github ."
 
       - name: Ruff format check (with small diff)
         uses: astral-sh/ruff-action@v3
         with:
+          version: "0.12.10"
           args: "format --check --diff ."
   build-test:
     runs-on: ubuntu-latest
