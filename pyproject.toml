@@ -1,8 +1,41 @@
+[project]
+name = 'profticket-to-telegram'
+version = '0.1.0'
+description = 'Telegram bot for theater schedules and ticket analytics'
+requires-python = '>=3.14,<3.15'
+dependencies = [
+    'aiogram>=3.31.0,<4',
+    'httpx[socks]>=0.28.1,<1',
+    'beautifulsoup4>=4.15.0,<5',
+    'pymorphy3>=2.0.6,<3',
+    'pytz>=2026.4',
+    'sqlalchemy[asyncio]>=2.1.2,<3',
+    'alembic>=1.20.0,<2',
+    'coloredlogs>=15.0.1,<16',
+    'cachetools>=7.2.0,<8',
+    'python-dateutil>=2.9.0.post0,<3',
+    'pydantic-settings>=2.15.0,<3',
+    'asyncpg>=0.31.0,<1',
+    'tenacity>=9.1.4,<10',
+    'fake-useragent>=2.2.0,<3',
+    'numpy>=2.5.3,<3',
+]
+
+[dependency-groups]
+dev = [
+    'pytest>=9.1.1,<10',
+    'ruff>=0.16.10,<1',
+]
+
+[tool.uv]
+package = false
+required-version = '>=0.12.19'
+
 [tool.ruff]
 line-length = 79
 output-format = "concise"
 show-fixes = true
-target-version = "py311"
+target-version = "py314"
 # Help Ruff detect first-party packages (improves isort grouping):
 src = ["."]
 exclude = [
@@ -19,6 +52,7 @@ quote-style = "single"
 docstring-code-format = true
 
 [tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 # Enable isort (I) and line-length diagnostics (E501) in addition to default E/F.
 # (Default Ruff already enables F + subset of E; we add I and E501 explicitly.)
 extend-select = [

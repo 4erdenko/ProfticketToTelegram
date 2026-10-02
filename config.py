@@ -1,7 +1,6 @@
-import os
 from typing import Literal
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -41,10 +40,9 @@ class Settings(BaseSettings):
     # Time settings
     DEFAULT_TIMEZONE: str = 'Europe/Moscow'
 
-    class Config:
-        if os.environ.get('IN_DOCKER') != '1':
-            env_file = '.env'
-            env_file_encoding = 'utf-8'
+    model_config = SettingsConfigDict(
+        env_file='.env', env_file_encoding='utf-8'
+    )
 
 
 settings = Settings()

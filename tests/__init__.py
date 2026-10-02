@@ -20,8 +20,8 @@ class Settings:
 config.settings = Settings()
 modules['config'] = config
 
-# pymorphy2 stub
-pymorphy2 = types.ModuleType('pymorphy2')
+# pymorphy3 stub
+pymorphy3 = types.ModuleType('pymorphy3')
 
 
 class MorphAnalyzer:
@@ -40,8 +40,8 @@ class MorphAnalyzer:
         return [Res(word)]
 
 
-pymorphy2.MorphAnalyzer = MorphAnalyzer
-modules['pymorphy2'] = pymorphy2
+pymorphy3.MorphAnalyzer = MorphAnalyzer
+modules['pymorphy3'] = pymorphy3
 
 # httpx stub
 httpx = types.ModuleType('httpx')
@@ -84,7 +84,7 @@ modules['fake_useragent'] = fake_useragent
 
 # tenacity stub
 tenacity = types.ModuleType('tenacity')
-tenacity.retry = lambda *a, **k: (lambda f: f)
+tenacity.retry = lambda *a, **k: lambda f: f
 tenacity.retry_if_exception_type = lambda *a, **k: None
 tenacity.stop_after_attempt = lambda *a, **k: None
 tenacity.wait_exponential = lambda *a, **k: None

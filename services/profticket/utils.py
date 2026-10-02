@@ -1,19 +1,9 @@
-import inspect
+import pymorphy3
 
-import pymorphy2
-
-if not hasattr(inspect, 'getargspec'):
-
-    def getargspec(func):
-        spec = inspect.getfullargspec(func)
-        return spec.args, spec.varargs, spec.varkw, spec.defaults
-
-    inspect.getargspec = getargspec
-
-morph = pymorphy2.MorphAnalyzer()
+morph = pymorphy3.MorphAnalyzer()
 
 
-def pluralize(word, count):
+def pluralize(word: str, count: int) -> str:
     """
     Function to return the correct plural form of a word
     depending on the count.

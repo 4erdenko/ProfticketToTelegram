@@ -1,6 +1,11 @@
 venv
+.git/
+__pycache__/
+*.pyc
 .my_local_dev/
 .env
+.env.*
+!.env.example
 .github
 .idea
 .gitignore
