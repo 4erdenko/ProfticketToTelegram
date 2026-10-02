@@ -1,12 +1,14 @@
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
 from telegram.db.user_operations import get_available_months, get_user
+from telegram.filters.is_admin import has_admin_access
 from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU
 
 
-async def main_keyboard(message: Message, session: AsyncSession):
+async def main_keyboard(
+    message: Message, session: AsyncSession
+) -> ReplyKeyboardMarkup:
     user_id = message.from_user.id
     user = await get_user(session, user_id)
     months = await get_available_months(session)
@@ -40,13 +42,7 @@ async def main_keyboard(message: Message, session: AsyncSession):
         ]
 
     # Add Admin button for admin user
-    try:
-        is_admin = message.from_user.id == settings.ADMIN_ID or bool(
-            getattr(user, 'admin', False)
-        )
-    except Exception:
-        is_admin = False
-    if is_admin:
+    if has_admin_access(user_id, user):
         kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/admin_menu'])])
 
     return ReplyKeyboardMarkup(

@@ -1,4 +1,5 @@
 import logging
+from html import escape
 
 from aiogram import F, Router
 from aiogram.filters import Command, or_f
@@ -20,6 +21,7 @@ from telegram.keyboards.personal_keyboard import personal_keyboard
 from telegram.lexicon.lexicon_ru import (
     LEXICON_BUTTONS_RU,
     LEXICON_LOGS,
+    LEXICON_MONTHS_RU,
     LEXICON_RU,
 )
 from telegram.tg_utils import check_text, send_chunks_edit
@@ -35,31 +37,52 @@ class ChooseYourFighter(StatesGroup):
 @personal_user_router.message(Command('cancel'))
 async def cmd_cancel(
     message: Message, state: FSMContext, session: AsyncSession
-):
+) -> None:
+    await state.clear()
     await message.answer(
         LEXICON_RU['MAIN_MENU'],
         reply_markup=await main_keyboard(message, session),
     )
-    await state.clear()
 
 
 @personal_user_router.message(
     or_f(F.text == LEXICON_BUTTONS_RU['/set_fighter'], Command('set_actor'))
 )
-async def cmd_choose_fighter(message: Message, state: FSMContext):
+async def cmd_choose_fighter(message: Message, state: FSMContext) -> None:
     await message.answer(text=LEXICON_RU['SET_NAME'])
     await state.set_state(ChooseYourFighter.set_your_fighter)
 
 
-@personal_user_router.message(ChooseYourFighter.set_your_fighter, F.text)
+@personal_user_router.message(
+    ChooseYourFighter.set_your_fighter,
+    F.text,
+    ~F.text.startswith('/'),
+    ~F.text.startswith(LEXICON_BUTTONS_RU['/shows_with']),
+    ~F.text.startswith('👤 '),
+    ~F.text.in_(
+        {
+            *LEXICON_BUTTONS_RU.values(),
+            *LEXICON_MONTHS_RU.values(),
+            '↩️',
+            'Этот',
+            'Следующий',
+            'Назад',
+            'Этот месяц',
+            'Следующий месяц',
+            'Выбрать актёра/актрису',
+        }
+    ),
+)
 async def cmd_set_fighter(
     message: Message, state: FSMContext, session: AsyncSession
-):
+) -> None:
     fio_from_user = await check_text(message)
     if fio_from_user:
         await set_spectacle_fio(session, message.from_user.id, fio_from_user)
         await message.answer(
-            text=LEXICON_RU['SET_NAME_SUCCESS'].format(message.text.title()),
+            text=LEXICON_RU['SET_NAME_SUCCESS'].format(
+                escape(fio_from_user.title())
+            ),
             reply_markup=await main_keyboard(message, session),
         )
         await state.clear()
@@ -71,7 +94,10 @@ async def cmd_set_fighter(
 @personal_user_router.message(
     F.text.startswith(LEXICON_BUTTONS_RU['/shows_with'])
 )
-async def cmd_my_shows(message: Message, session: AsyncSession):
+async def cmd_my_shows(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    await state.clear()
     user = await get_user(session, message.from_user.id)
     if not user or not user.spectacle_full_name:
         await message.answer(
@@ -87,7 +113,10 @@ async def cmd_my_shows(message: Message, session: AsyncSession):
 
 
 @personal_user_router.message(F.text == '↩️')
-async def cmd_back_to_main_menu(message: Message, session: AsyncSession):
+async def cmd_back_to_main_menu(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    await state.clear()
     await message.answer(
         LEXICON_RU['MAIN_MENU'],
         reply_markup=await main_keyboard(message, session),

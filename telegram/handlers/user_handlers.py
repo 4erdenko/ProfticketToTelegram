@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 @user_router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession):
+async def cmd_start(
+    message: Message, session: AsyncSession, state: FSMContext
+) -> None:
+    await state.clear()
     await message.answer(
         LEXICON_COMMANDS_RU['/start'],
         reply_markup=await main_keyboard(message, session),

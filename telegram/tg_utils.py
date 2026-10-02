@@ -1,7 +1,9 @@
 import asyncio
 import string
+import unicodedata
 from datetime import datetime
 from html import escape
+from html.parser import HTMLParser
 
 import pytz
 from aiogram.types import Message
@@ -153,6 +155,60 @@ def get_result_message(
     )
 
 
+def _text_length(text: str) -> int:
+    """Count Telegram text offsets in UTF-16 code units."""
+    return len(text.encode('utf-16-le')) // 2
+
+
+class _HTMLMessageParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tags: list[tuple[str, str]] = []
+        self.runs: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        self.tags.append((tag, self.get_starttag_text()))
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self.tags or self.tags[-1][0] != tag:
+            raise ValueError('Unbalanced HTML message')
+        self.tags.pop()
+
+    def handle_data(self, data: str) -> None:
+        self.runs.append((data, tuple(self.tags)))
+
+    def render(self, start: int, end: int) -> str:
+        parts: list[str] = []
+        active: tuple[tuple[str, str], ...] = ()
+        offset = 0
+        for data, tags in self.runs:
+            run_end = offset + len(data)
+            if run_end > start and offset < end:
+                common = 0
+                for current, previous in zip(tags, active, strict=False):
+                    if current != previous:
+                        break
+                    common += 1
+                parts.extend(
+                    f'</{tag}>' for tag, _ in reversed(active[common:])
+                )
+                parts.extend(markup for _, markup in tags[common:])
+                parts.append(
+                    escape(
+                        data[max(0, start - offset) : end - offset],
+                        quote=False,
+                    )
+                )
+                active = tags
+            offset = run_end
+            if offset >= end:
+                break
+        parts.extend(f'</{tag}>' for tag, _ in reversed(active))
+        return ''.join(parts).rstrip()
+
+
 def split_message_by_separator(
     message: str,
     separator: str = '\n------------------------\n',
@@ -170,19 +226,33 @@ def split_message_by_separator(
     Returns:
         list: A list of message chunks
     """
-    chunks = []
-    current_chunk = ''
-
-    for block in message.split(separator):
-        if len(current_chunk) + len(block) + len(separator) > max_length:
-            chunks.append(current_chunk.rstrip())
-            current_chunk = ''
-
-        current_chunk += block + separator
-
-    if current_chunk:
-        chunks.append(current_chunk.rstrip())
-
+    if max_length < 2:
+        raise ValueError('Message limit must fit a Unicode character')
+    if not message.strip():
+        return []
+    parser = _HTMLMessageParser()
+    parser.feed(message)
+    parser.close()
+    parser.runs.append((separator, ()))
+    text = ''.join(data for data, _ in parser.runs)
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        end = start
+        length = 0
+        while end < len(text):
+            size = 2 if ord(text[end]) > 0xFFFF else 1
+            if length + size > max_length:
+                break
+            length += size
+            end += 1
+        if end < len(text) and separator:
+            boundary = text.rfind(separator, start, end)
+            if boundary >= start:
+                end = boundary + len(separator)
+        if text[start:end].strip():
+            chunks.append(parser.render(start, end))
+        start = end
     return chunks
 
 
@@ -208,6 +278,15 @@ async def send_chunks_edit(
             await asyncio.sleep(1)
 
 
+def normalize_actor_name(name: str) -> str:
+    """Use the same Unicode and whitespace normalization for both casts."""
+    punctuation = string.punctuation.replace('-', '').replace("'", '')
+    text = unicodedata.normalize('NFKC', name).casefold()
+    text = text.translate(str.maketrans('‐‑‒–—’', "-----'"))
+    text = text.translate(str.maketrans('', '', punctuation))
+    return ' '.join(text.split())
+
+
 async def check_text(message: Message) -> str | None:
     """
     Check if message text is valid name format.
@@ -218,11 +297,17 @@ async def check_text(message: Message) -> str | None:
     Returns:
         str: Cleaned text if valid, None otherwise
     """
-    text = message.text
-    if isinstance(text, str):
-        text = text.lower().strip()
-        text = text.translate(str.maketrans('', '', string.punctuation))
-        if len(text.split(' ')) == 2:
+    if isinstance(message.text, str) and not any(
+        char in message.text for char in '<>&'
+    ):
+        text = normalize_actor_name(message.text)
+        words = text.split()
+        if len(words) == 2 and all(
+            word[0].isalpha()
+            and word[-1].isalpha()
+            and all(char.isalpha() or char in "-'" for char in word)
+            for word in words
+        ):
             return text
     return None
 
@@ -239,6 +324,17 @@ async def send_chunks_answer(message: Message, text: str, **kwargs) -> None:
     chunks = split_message_by_separator(
         text, separator='\n\n', max_length=settings.MAX_MSG_LEN
     )
+    while len(chunks) > 1:
+        count = len(chunks)
+        prefix_length = _text_length(f'Продолжение ({count}/{count}):\n\n')
+        shorter_chunks = split_message_by_separator(
+            text,
+            separator='\n\n',
+            max_length=settings.MAX_MSG_LEN - prefix_length,
+        )
+        chunks = shorter_chunks
+        if len(chunks) == count:
+            break
 
     for i, chunk in enumerate(chunks):
         if i == 0:

@@ -4,6 +4,7 @@ from typing import Any
 
 from aiogram import BaseMiddleware, types
 from aiogram.types import TelegramObject, Update
+from sqlalchemy.dialects.postgresql import insert
 
 from telegram.db.models import User
 
@@ -11,23 +12,29 @@ logger = logging.getLogger(__name__)
 
 
 class UserLoggingMiddleware(BaseMiddleware):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     async def on_process_message(
         self, update: types.Update, data: dict[str, Any]
     ) -> None:
         session = data['session']
-        if update.message:
-            message = update.message
-            user = await session.get(User, message.from_user.id)
+        event_user = data.get('event_from_user')
+        if event_user is None and update.message:
+            event_user = update.message.from_user
+        if event_user is not None:
+            user = await session.get(User, event_user.id)
             if not user:
-                user = User(
-                    user_id=message.from_user.id,
-                    username=message.from_user.username,
-                    bot_full_name=message.from_user.full_name,
+                statement = insert(User).values(
+                    user_id=event_user.id,
+                    username=event_user.username,
+                    bot_full_name=event_user.full_name,
                 )
-                session.add(user)
+                await session.execute(
+                    statement.on_conflict_do_nothing(
+                        index_elements=[User.user_id]
+                    )
+                )
                 await session.commit()
 
     async def __call__(

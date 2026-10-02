@@ -46,6 +46,7 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
@@ -139,21 +140,194 @@ def filter_data_by_period(
 def get_net_sales_and_returns(
     hist: Sequence[ShowSeatHistory],
 ) -> tuple[int, int]:
-    """Подсчёт продаж и возвратов из истории"""
-    if len(hist) < 2:
-        return 0, 0
-
-    sorted_hist = sorted(hist, key=lambda r: r.timestamp)
+    """Count observed sales and returns in deterministic snapshot order."""
+    records = sorted(
+        (
+            row
+            for row in hist
+            if row.timestamp is not None and row.seats is not None
+        ),
+        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
+    )
     sold = returned = 0
-
-    for prev, curr in zip(sorted_hist, sorted_hist[1:], strict=False):
-        diff = prev.seats - curr.seats
-        if diff > 0:
-            sold += diff
-        elif diff < 0:
-            returned += -diff
-
+    for previous, current in zip(records, records[1:], strict=False):
+        difference = previous.seats - current.seats
+        sold += max(difference, 0)
+        returned += max(-difference, 0)
     return sold, returned
+
+
+@dataclass(slots=True)
+class PerformanceSales:
+    show: Show
+    sold: int
+    returned: int
+    first_seen: int | None = None
+
+
+def _performance_sales(
+    shows: Sequence[Show],
+    histories: Sequence[ShowSeatHistory],
+    month: int | None,
+    year: int | None,
+    include_past_shows: bool,
+) -> list[PerformanceSales]:
+    selected, buckets = filter_data_by_period(
+        shows, histories, month, year, include_past_shows
+    )
+    result = []
+    for show in selected:
+        records = [
+            row
+            for row in buckets.get(show.id, [])
+            if row.timestamp is not None and row.seats is not None
+        ]
+        if len(records) >= 2:
+            sold, returned = get_net_sales_and_returns(records)
+            result.append(
+                PerformanceSales(
+                    show,
+                    sold,
+                    returned,
+                    min(row.timestamp for row in records),
+                )
+            )
+    return result
+
+
+def group_sales(
+    performances: Sequence[PerformanceSales],
+) -> dict[str | int, PerformanceSales]:
+    """Combine all performances before applying report thresholds."""
+    groups: dict[str | int, PerformanceSales] = {}
+    for item in performances:
+        key = getattr(item.show, 'show_id', None) or item.show.id
+        if key not in groups:
+            groups[key] = PerformanceSales(item.show, 0, 0, item.first_seen)
+        group = groups[key]
+        group.sold += item.sold
+        group.returned += item.returned
+        if item.first_seen is not None:
+            group.first_seen = min(
+                group.first_seen
+                if group.first_seen is not None
+                else item.first_seen,
+                item.first_seen,
+            )
+    return groups
+
+
+def real_actors(show: Show) -> list[str]:
+    """Return unique names, excluding titles and malformed actor data."""
+    try:
+        names = json.loads(show.actors) if show.actors else []
+    except json.JSONDecodeError, TypeError:
+        return []
+    if not isinstance(names, list):
+        return []
+    return sorted(
+        {
+            name.strip()
+            for name in names
+            if isinstance(name, str)
+            and name.strip()
+            and not any(title in name.lower() for title in TITLES_TO_SKIP)
+        }
+    )
+
+
+def sales_report(
+    performances: Sequence[PerformanceSales],
+    n: int = 10,
+) -> list[tuple[str, int, int, str | int]]:
+    groups = group_sales(performances)
+    ordered = sorted(
+        groups.items(), key=lambda item: (-item[1].sold, str(item[0]))
+    )
+    return [
+        (item.show.show_name, item.sold, item.sold - item.returned, key)
+        for key, item in ordered
+        if item.sold > 0
+    ][:n]
+
+
+def returns_report(
+    performances: Sequence[PerformanceSales],
+    n: int = 10,
+) -> list[tuple[str, int, str | int]]:
+    groups = group_sales(performances)
+    ordered = sorted(
+        groups.items(), key=lambda item: (-item[1].returned, str(item[0]))
+    )
+    return [
+        (item.show.show_name, item.returned, key)
+        for key, item in ordered
+        if item.returned > 0
+    ][:n]
+
+
+def return_rate_report(
+    performances: Sequence[PerformanceSales],
+    n: int = 10,
+) -> list[tuple[str, float, str | int]]:
+    result = [
+        (item.show.show_name, item.returned / item.sold, key)
+        for key, item in group_sales(performances).items()
+        if item.sold >= 10
+    ]
+    return sorted(result, key=lambda item: (-item[1], str(item[2])))[:n]
+
+
+def artists_report(
+    performances: Sequence[PerformanceSales],
+    n: int = 10,
+) -> list[tuple[str, int]]:
+    totals: dict[str, int] = defaultdict(int)
+    for item in performances:
+        for actor in real_actors(item.show):
+            totals[actor] += item.sold - item.returned
+    return sorted(
+        ((actor, total) for actor, total in totals.items() if total > 0),
+        key=lambda item: (-item[1], item[0]),
+    )[:n]
+
+
+def calendar_report(
+    performances: Sequence[PerformanceSales],
+    n: int = 10,
+) -> dict[str, list]:
+    groups: dict[str, dict] = {}
+    for item in performances:
+        date = item.show.date or ''
+        group = groups.setdefault(
+            date, {'sold': 0, 'returned': 0, 'names': []}
+        )
+        group['sold'] += item.sold
+        group['returned'] += item.returned
+        group['names'].append(item.show.show_name)
+
+    def date_key(value: str) -> tuple[int, str]:
+        parsed = parse_show_date(value)
+        return (0, parsed.isoformat()) if parsed is not None else (1, value)
+
+    result = {
+        key: []
+        for key in (
+            'dates',
+            'gross_sales',
+            'net_sales',
+            'refunds',
+            'show_names',
+        )
+    }
+    for date in sorted(groups, key=date_key):
+        group = groups[date]
+        result['dates'].append(date)
+        result['gross_sales'].append(group['sold'])
+        result['net_sales'].append(group['sold'] - group['returned'])
+        result['refunds'].append(group['returned'])
+        result['show_names'].append(group['names'])
+    return result
 
 
 def top_shows_by_sales(
@@ -214,7 +388,16 @@ def calculate_current_sales_rate(
 
     MIN_DT = 900  # 15 минут — минимальный шаг между соседними точками
 
-    records = sorted(history, key=lambda r: r.timestamp)
+    records = sorted(
+        (
+            row
+            for row in history
+            if row.timestamp is not None and row.seats is not None
+        ),
+        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
+    )
+    if len(records) < 2:
+        return None
     current_ts = records[-1].timestamp
     lookback_seconds = lookback_hours * 3600
     cutoff_ts = current_ts - lookback_seconds
@@ -268,8 +451,7 @@ def calculate_current_sales_rate(
         else:
             slope = a1
 
-        rate_sec = max(0.0, -slope / 3600.0)
-        return rate_sec if rate_sec > 0 else None
+        return float(-slope / 3600.0)
 
     # Иначе — EWMA по интервалам (как раньше), но с MIN_DT=15 мин
     rates: list[float] = []
@@ -296,7 +478,16 @@ def _count_valid_intervals(
 ) -> int:
     if len(history) < 2:
         return 0
-    records = sorted(history, key=lambda r: r.timestamp)
+    records = sorted(
+        (
+            row
+            for row in history
+            if row.timestamp is not None and row.seats is not None
+        ),
+        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
+    )
+    if len(records) < 2:
+        return 0
     current_ts = records[-1].timestamp
     cutoff_ts = current_ts - lookback_hours * 3600
     recent = [r for r in records if r.timestamp >= cutoff_ts]
@@ -351,7 +542,7 @@ def top_shows_by_current_sales_speed(
 
         # Используем последние 24 часа для оценки текущей скорости
         current_rate = calculate_current_sales_rate(h_rows, lookback_hours=24)
-        if current_rate is not None and current_rate > 0:
+        if current_rate is not None:
             group_key = getattr(show, 'show_id', None) or show.id
             weight = _count_valid_intervals(
                 h_rows, lookback_hours=24, min_dt=900
@@ -376,7 +567,8 @@ def top_shows_by_current_sales_speed(
     for gid, payload in agg_by_group.items():
         name = str(payload['name'])
         rate = float(payload['rate_sum']) / float(payload['w_sum'])
-        speed_data.append((name, rate, gid))
+        if rate > 0:
+            speed_data.append((name, rate, gid))
     speed_data.sort(key=lambda x: -x[1])
     return speed_data[:n]
 
@@ -394,7 +586,16 @@ def predict_sold_out_advanced(
     if len(history) < 4:
         return None
 
-    records = sorted(history, key=lambda r: r.timestamp)
+    records = sorted(
+        (
+            row
+            for row in history
+            if row.timestamp is not None and row.seats is not None
+        ),
+        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
+    )
+    if len(records) < 4:
+        return None
 
     if now_ts is None:
         tz = pytz.timezone(
@@ -624,54 +825,18 @@ def top_shows_by_return_rate(
     year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> list[tuple[str, float, str]]:
-    """Топ шоу по проценту возвратов"""
-    filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year, include_past_shows=include_past_shows
+) -> list[tuple[str, float, str | int]]:
+    """Rank grouped performances by returns divided by observed sales."""
+    return return_rate_report(
+        _performance_sales(
+            shows,
+            histories,
+            month,
+            year,
+            include_past_shows,
+        ),
+        n,
     )
-
-    show_stats = {}
-    for show in filtered_shows:
-        h_rows = history_buckets.get(show.id, [])
-        if len(h_rows) < 2:
-            continue
-
-        sold, returned = get_net_sales_and_returns(h_rows)
-
-        # Используем базу по продажам: return-rate = returned / sold
-        # Фильтруем шоу с малым количеством продаж
-        MIN_SOLD = 10
-        if sold < MIN_SOLD:
-            continue
-
-        return_rate = returned / sold if sold > 0 else 0.0
-
-        group_key = getattr(show, 'show_id', None) or show.id
-        if group_key not in show_stats:
-            show_stats[group_key] = {
-                'name': show.show_name,
-                'return_rate': return_rate,
-                'total_sold': sold,
-                'id': group_key,
-            }
-        else:
-            # Если уже есть, пересчитываем средневзвешенный процент
-            existing = show_stats[group_key]
-            new_total = existing['total_sold'] + sold
-            new_rate = (
-                existing['return_rate'] * existing['total_sold']
-                + return_rate * sold
-            ) / new_total
-            existing['return_rate'] = new_rate
-            existing['total_sold'] = new_total
-
-    # Сортируем по проценту возвратов
-    result = [
-        (stats['name'], stats['return_rate'], stats['id'])
-        for stats in show_stats.values()
-    ]
-    result.sort(key=lambda x: -x[1])
-    return result[:n]
 
 
 def top_artists_by_sales(
@@ -682,58 +847,17 @@ def top_artists_by_sales(
     n: int = 5,
     include_past_shows: bool = False,
 ) -> list[tuple[str, int]]:
-    """Топ артистов по net продажам (продажи минус возвраты)"""
-    filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year, include_past_shows=include_past_shows
+    """Rank artists by net sales across all their performances."""
+    return artists_report(
+        _performance_sales(
+            shows,
+            histories,
+            month,
+            year,
+            include_past_shows,
+        ),
+        n,
     )
-
-    show_net_sales = {}
-    for show in filtered_shows:
-        h_rows = history_buckets.get(show.id, [])
-        if len(h_rows) < 2:
-            continue
-
-        sold, returned = get_net_sales_and_returns(h_rows)
-        net_sales = sold - returned
-        if net_sales > 0:  # Учитываем только положительные net продажи
-            show_net_sales[show.id] = net_sales
-
-    artist_aggregated_sales = defaultdict(int)
-
-    for show in filtered_shows:
-        net_sales_for_this_show = show_net_sales.get(show.id, 0)
-        if net_sales_for_this_show > 0:
-            try:
-                actors_list = json.loads(show.actors) if show.actors else []
-                if not isinstance(actors_list, list):
-                    actors_list = []
-            except json.JSONDecodeError:
-                actors_list = []
-
-            # Отфильтровываем только реальных актеров, исключая титулы
-            real_actors = []
-            for actor in actors_list:
-                if not isinstance(actor, str) or not actor.strip():
-                    continue
-
-                actor_name = actor.strip()
-                actor_lower = actor_name.lower()
-
-                # Проверяем, не является ли строка титулом
-                is_title = any(
-                    title in actor_lower for title in TITLES_TO_SKIP
-                )
-
-                if not is_title:
-                    real_actors.append(actor_name)
-
-            # Добавляем net продажи только для реальных актеров
-            for actor_name in real_actors:
-                artist_aggregated_sales[actor_name] += net_sales_for_this_show
-
-    return sorted(
-        artist_aggregated_sales.items(), key=lambda x: (-x[1], x[0])
-    )[:n]
 
 
 def calendar_pace_dashboard(
@@ -741,106 +865,29 @@ def calendar_pace_dashboard(
     histories: Sequence[ShowSeatHistory],
     month: int | None = None,
     year: int | None = None,
-    n: int = 10,  # Добавляем для совместимости API (не используется)
+    n: int = 10,
     include_past_shows: bool = False,
-) -> dict:
-    """
-    Календарный pace-дашборд с разделением gross/net/refunds
-    Возвращает данные для построения кривых спроса
-
-    Args:
-        n: параметр для совместимости API
-        (не используется, т.к. возвращаем данные по дням)
-    """
-    filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year, include_past_shows=include_past_shows
+) -> dict[str, list]:
+    """Group observed sales and returns by performance date."""
+    return calendar_report(
+        _performance_sales(
+            shows,
+            histories,
+            month,
+            year,
+            include_past_shows,
+        ),
+        n,
     )
-
-    # Группируем по датам шоу
-    date_groups = defaultdict(
-        lambda: {
-            'shows': [],
-            'total_gross': 0,
-            'total_net': 0,
-            'total_refunds': 0,
-            'histories': [],
-        }
-    )
-
-    for show in filtered_shows:
-        h_rows = history_buckets.get(show.id, [])
-        if len(h_rows) < 2:
-            continue
-
-        sold, returned = get_net_sales_and_returns(h_rows)
-        net_sales_amount = sold - returned  # Чистая сумма продаж без возвратов
-
-        show_date = show.date
-        date_groups[show_date]['shows'].append(show.show_name)
-        date_groups[show_date]['total_gross'] += sold  # Gross = все продажи
-        date_groups[show_date]['total_net'] += (
-            net_sales_amount  # Net = продажи - возвраты
-        )
-        date_groups[show_date]['total_refunds'] += returned
-        date_groups[show_date]['histories'].extend(h_rows)
-
-    # Сортируем по дате (распарсиваем строковые даты в datetime)
-    # Для неподдающихся парсингу — сортируем по строковому значению после дат
-    sortable: list[tuple[int, object, str, dict]] = []
-    for date_str, data in date_groups.items():
-        dt = parse_show_date(date_str)
-        if dt is not None:
-            sortable.append((0, dt, date_str, data))
-        else:
-            sortable.append((1, date_str, date_str, data))
-
-    sorted_dates = [
-        (date_str, data) for _, _, date_str, data in sorted(sortable)
-    ]
-
-    # Валидация: если нет данных, возвращаем пустую структуру
-    if not sorted_dates:
-        return {
-            'dates': [],
-            'gross_sales': [],
-            'net_sales': [],
-            'refunds': [],
-            'show_names': [],
-        }
-
-    result = {
-        'dates': [],
-        'gross_sales': [],
-        'net_sales': [],
-        'refunds': [],
-        'show_names': [],
-    }
-
-    for date, data in sorted_dates:
-        result['dates'].append(date)
-        result['gross_sales'].append(data['total_gross'])
-        result['net_sales'].append(data['total_net'])
-        result['refunds'].append(data['total_refunds'])
-        result['show_names'].append(data['shows'])
-
-    return result
 
 
 def show_financial_summary(
     show_id: str,
     shows: Sequence[Show],
     histories: Sequence[ShowSeatHistory],
-    n: int = 10,  # Добавляем для совместимости API (не используется)
+    n: int = 10,
 ) -> dict | None:
-    """
-    Финансовая сводка по конкретному шоу
-    Показывает gross/net для бухгалтерии и маркетинга
-
-    Args:
-        n: параметр для совместимости API
-        (не используется для сводки конкретного шоу)
-    """
-    # Находим все шоу с данным show_id (исключая удаленные)
+    """Summarize grouped sales; retain unused n for API compatibility."""
     target_shows = [
         s
         for s in shows
@@ -850,11 +897,11 @@ def show_financial_summary(
     if not target_shows:
         return None
 
-    # Собираем всю историю для этого шоу
-    all_histories = []
     total_gross = 0
     total_net = 0
     total_refunds = 0
+    rate_sum = 0.0
+    rate_weight = 0
     show_dates = []
     show_names = set()
 
@@ -871,31 +918,28 @@ def show_financial_summary(
         total_net += net_sales
         show_dates.append(show.date)
         show_names.add(show.show_name)
-        all_histories.extend(h_rows)
+        current_rate = calculate_current_sales_rate(h_rows, lookback_hours=24)
+        if current_rate is not None:
+            weight = max(_count_valid_intervals(h_rows), 1)
+            rate_sum += current_rate * weight
+            rate_weight += weight
 
     if total_gross == 0:
         return None
 
-    # Рассчитываем дополнительную аналитику
     refund_rate = total_refunds / total_gross
-
-    # Текущая скорость продаж
-    current_sales_rate = None
-    if all_histories:
-        current_sales_rate = calculate_current_sales_rate(
-            all_histories, lookback_hours=24
-        )
+    current_sales_rate = rate_sum / rate_weight if rate_weight else None
 
     return {
         'show_id': show_id,
         'show_names': list(show_names),
         'show_dates': show_dates,
-        'gross_sales': total_gross,  # для маркетинга
-        'net_sales': total_net,  # для бухгалтерии и royalty
+        'gross_sales': total_gross,
+        'net_sales': total_net,
         'total_refunds': total_refunds,
-        'refund_rate': round(refund_rate * 100, 2),  # в процентах
+        'refund_rate': round(refund_rate * 100, 2),
         'current_sales_rate_per_hour': round(current_sales_rate * 3600, 2)
-        if current_sales_rate
+        if current_sales_rate is not None
         else None,
         'total_performances': len(target_shows),
     }
@@ -908,43 +952,15 @@ def top_shows_by_sales_detailed(
     year: int | None = None,
     n: int = 5,
     include_past_shows: bool = False,
-) -> list[tuple[str, int, int, str]]:
-    """
-    Топ шоу по продажам с детализацией gross/net
-    Возвращает: (name, gross_sales, net_sales, id)
-    """
-    filtered_shows, history_buckets = filter_data_by_period(
-        shows, histories, month, year, include_past_shows=include_past_shows
+) -> list[tuple[str, int, int, str | int]]:
+    """Rank grouped gross sales while including every performance's returns."""
+    return sales_report(
+        _performance_sales(
+            shows,
+            histories,
+            month,
+            year,
+            include_past_shows,
+        ),
+        n,
     )
-
-    sales_data = {}
-    for show in filtered_shows:
-        h_rows = history_buckets.get(show.id, [])
-        if len(h_rows) < 2:
-            continue
-
-        sold, returned = get_net_sales_and_returns(h_rows)
-        if sold > 0:
-            group_key = getattr(show, 'show_id', None) or show.id
-            if group_key not in sales_data:
-                sales_data[group_key] = {
-                    'name': show.show_name,
-                    'total_sold': 0,
-                    'total_returned': 0,
-                    'id': group_key,
-                }
-            sales_data[group_key]['total_sold'] += sold
-            sales_data[group_key]['total_returned'] += returned
-
-    # Сортируем по gross продажам
-    ordered = sorted(sales_data.values(), key=lambda x: -x['total_sold'])
-
-    return [
-        (
-            item['name'],
-            item['total_sold'],  # gross
-            item['total_sold'] - item['total_returned'],  # net
-            item['id'],
-        )
-        for item in ordered[:n]
-    ]

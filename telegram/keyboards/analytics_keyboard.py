@@ -44,6 +44,7 @@ def analytics_main_menu_keyboard() -> ReplyKeyboardMarkup:
                     text=LEXICON_BUTTONS_RU['/report_top_shows_return_rate']
                 ),
             ],
+            [KeyboardButton(text=LEXICON_BUTTONS_RU['/report_calendar_pace'])],
             # Кнопка навигации
             [KeyboardButton(text=LEXICON_BUTTONS_RU['/back_to_main_menu'])],
         ],
@@ -109,10 +110,8 @@ def analytics_months_keyboard(
 def analytics_months_with_alltime_keyboard(
     months: list[tuple[int, int]],
 ) -> ReplyKeyboardMarkup:
-    now = datetime.now(DEFAULT_TIMEZONE)
-    filtered = [(m, y) for m, y in months if (y, m) >= (now.year, now.month)]
     buttons = [KeyboardButton(text=LEXICON_BUTTONS_RU['/period_all_time'])]
-    for month, year in filtered:
+    for month, year in months:
         month_name = LEXICON_MONTHS_RU.get(
             datetime(year, month, 1).strftime('%B'), f'Месяц {month}'
         )

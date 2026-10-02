@@ -1,6 +1,6 @@
-import json
 import logging
 from datetime import datetime
+from html import escape
 
 import pytz
 from aiogram import F, Router
@@ -8,13 +8,10 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from services.profticket import analytics
-from services.profticket.analytics import TITLES_TO_SKIP
-from telegram.db.models import Show, ShowSeatHistory
+from services.profticket.analytics_repository import AnalyticsRepository
 from telegram.keyboards.analytics_keyboard import (
     RUS_TO_MONTH,
     analytics_main_menu_keyboard,
@@ -45,40 +42,46 @@ class AnalyticsStates(StatesGroup):
 # REPORTS объединённый
 REPORTS = {
     LEXICON_BUTTONS_RU['/report_top_shows_sales']: {
-        'handler': analytics.top_shows_by_sales_detailed,
+        'kind': 'sales',
         'title': LEXICON_RU['TOP_SHOWS_SALES_REPORT_TITLE'],
     },
     LEXICON_BUTTONS_RU['/report_top_shows_speed']: {
-        'handler': analytics.top_shows_by_current_sales_speed,
+        'kind': 'speed',
         'title': LEXICON_RU['TOP_SHOWS_SPEED_REPORT_TITLE'],
     },
     LEXICON_BUTTONS_RU['/report_predict_sell_out']: {
-        'handler': analytics.shows_predicted_to_sell_out_soonest,
+        'kind': 'prediction',
         'title': LEXICON_RU['PREDICT_SELL_OUT_REPORT_TITLE'],
     },
     LEXICON_BUTTONS_RU['/report_top_artists_sales']: {
-        'handler': analytics.top_artists_by_sales,
+        'kind': 'artists',
         'title': LEXICON_RU['TOP_ARTISTS_REPORT'],
     },
     LEXICON_BUTTONS_RU['/report_calendar_pace']: {
-        'handler': analytics.calendar_pace_dashboard,
+        'kind': 'calendar',
         'title': LEXICON_RU['CALENDAR_PACE_REPORT_TITLE'],
     },
     # Добавляем новые отчёты по возвратам
     LEXICON_BUTTONS_RU['/report_top_shows_returns']: {
-        'handler': analytics.top_shows_by_returns,
+        'kind': 'returns',
         'title': LEXICON_RU['TOP_SHOWS_RETURNS_REPORT_TITLE'],
     },
     LEXICON_BUTTONS_RU['/report_top_shows_return_rate']: {
-        'handler': analytics.top_shows_by_return_rate,
+        'kind': 'return_rate',
         'title': LEXICON_RU['TOP_SHOWS_RETURN_RATE_REPORT_TITLE'],
     },
+}
+
+ADMIN_NAVIGATION = {
+    text
+    for command, text in LEXICON_BUTTONS_RU.items()
+    if command.startswith('/admin_')
 }
 
 
 # --- Navigation Handlers ---
 @analytics_router.message(F.text == LEXICON_BUTTONS_RU['/analytics_menu'])
-async def cmd_analytics_menu(message: Message, state: FSMContext):
+async def cmd_analytics_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         LEXICON_RU['ANALYTICS_MENU_TITLE'],
@@ -87,7 +90,7 @@ async def cmd_analytics_menu(message: Message, state: FSMContext):
 
 
 @analytics_router.message(F.text == '/analytics')
-async def cmd_analytics_menu_text(message: Message, state: FSMContext):
+async def cmd_analytics_menu_text(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         LEXICON_RU['ANALYTICS_MENU_TITLE'],
@@ -98,7 +101,9 @@ async def cmd_analytics_menu_text(message: Message, state: FSMContext):
 @analytics_router.message(
     F.text == LEXICON_BUTTONS_RU['/back_to_analytics_menu']
 )
-async def cmd_back_to_analytics_menu(message: Message, state: FSMContext):
+async def cmd_back_to_analytics_menu(
+    message: Message, state: FSMContext
+) -> None:
     await state.clear()
     await message.answer(
         LEXICON_RU['ANALYTICS_MENU_TITLE'],
@@ -109,7 +114,7 @@ async def cmd_back_to_analytics_menu(message: Message, state: FSMContext):
 @analytics_router.message(F.text == LEXICON_BUTTONS_RU['/back_to_main_menu'])
 async def cmd_back_to_main_menu(
     message: Message, session: AsyncSession, state: FSMContext
-):
+) -> None:
     await state.clear()
     await message.answer(
         LEXICON_RU['MAIN_MENU'],
@@ -122,6 +127,7 @@ async def cmd_back_to_main_menu(
     F.text.in_(
         [
             LEXICON_BUTTONS_RU['/report_top_shows_sales'],
+            LEXICON_BUTTONS_RU['/report_calendar_pace'],
             LEXICON_BUTTONS_RU['/report_top_shows_speed'],
             LEXICON_BUTTONS_RU['/report_top_artists_sales'],
             # Добавляем новые отчёты в обработчик
@@ -132,10 +138,8 @@ async def cmd_back_to_main_menu(
 )
 async def cmd_select_report_type(
     message: Message, state: FSMContext, session: AsyncSession
-):
-    # Получаем все доступные месяцы из базы
-    shows = (await session.execute(select(Show))).scalars().all()
-    months = sorted({(s.month, s.year) for s in shows if s.month and s.year})
+) -> None:
+    months = await AnalyticsRepository(session).available_months()
     if not months:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
@@ -152,10 +156,8 @@ async def cmd_select_report_type(
 )
 async def cmd_select_soldout_report(
     message: Message, state: FSMContext, session: AsyncSession
-):
-    # Получаем все доступные месяцы из базы
-    shows = (await session.execute(select(Show))).scalars().all()
-    months = sorted({(s.month, s.year) for s in shows if s.month and s.year})
+) -> None:
+    months = await AnalyticsRepository(session).available_months()
     if not months:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
@@ -168,13 +170,19 @@ async def cmd_select_soldout_report(
 
 
 # --- Period Selection & Report Generation ---
-@analytics_router.message(StateFilter(AnalyticsStates.choosing_month_for_top))
+@analytics_router.message(
+    StateFilter(AnalyticsStates.choosing_month_for_top),
+    F.text,
+    ~F.text.in_(ADMIN_NAVIGATION),
+)
 async def cmd_generate_top_report_month(
     message: Message, session: AsyncSession, state: FSMContext
-):
+) -> None:
+    if not message.text:
+        await message.answer(LEXICON_RU['CHOOSE_REPORT_PERIOD'])
+        return
     user_data = await state.get_data()
     text = message.text.strip()
-    await state.clear()
     if text == LEXICON_BUTTONS_RU['/period_all_time']:
         month, year = None, None
         period_text = ' (за всё время)'
@@ -195,8 +203,11 @@ async def cmd_generate_top_report_month(
             await message.answer(LEXICON_RU['ERROR_MSG'])
             return
     report_type_key = user_data.get('report_type_to_generate')
-    analytics_func = REPORTS[report_type_key]['handler']
+    if report_type_key not in REPORTS:
+        await message.answer(LEXICON_RU['ERROR_MSG'])
+        return
     report_title = REPORTS[report_type_key]['title']
+    await state.clear()
 
     # Логгирование запроса аналитики
     period = (
@@ -211,42 +222,10 @@ async def cmd_generate_top_report_month(
     await message.answer(
         LEXICON_RU['WAIT_MSG'], reply_markup=analytics_main_menu_keyboard()
     )
-    all_shows = (await session.execute(select(Show))).scalars().all()
-    all_histories = (
-        (await session.execute(select(ShowSeatHistory))).scalars().all()
+    report_data = await AnalyticsRepository(session).report(
+        REPORTS[report_type_key]['kind'], month, year, n=10
     )
-    if not all_shows or not all_histories:
-        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
-        return
-
-    if month is None and year is None:
-        results = analytics_func(
-            shows=all_shows,
-            histories=all_histories,
-            month=month,
-            year=year,
-            n=10,
-            include_past_shows=True,
-        )
-    elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
-        # Скорость продаж - всегда включаем прошедшие для анализа
-        results = analytics_func(
-            shows=all_shows,
-            histories=all_histories,
-            month=month,
-            year=year,
-            n=10,
-            include_past_shows=True,
-        )
-    else:
-        # Конкретный период - только активные спектакли
-        results = analytics_func(
-            shows=all_shows,
-            histories=all_histories,
-            month=month,
-            year=year,
-            n=10,
-        )
+    results = report_data.results
 
     # Проверяем результаты с учётом типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_calendar_pace']:
@@ -276,43 +255,8 @@ async def cmd_generate_top_report_month(
             f'<i>{LEXICON_RU["CALENDAR_PACE_FORMAT_EXPLANATION"]}</i>'
         )
 
-    event_to_group = {
-        s.id: getattr(s, 'show_id', None) or s.id for s in all_shows
-    }
-    first_seen: dict[str, int] = {}
-    for h in all_histories:
-        gkey = event_to_group.get(h.show_id)
-        if not gkey:
-            continue
-        ts = first_seen.get(gkey)
-        first_seen[gkey] = (
-            h.timestamp if ts is None or h.timestamp < ts else ts
-        )
-
-    artist_first_seen: dict[str, int] = {}
-    if month is None and year is None:
-        titles_to_skip = TITLES_TO_SKIP
-        for show in all_shows:
-            gkey = getattr(show, 'show_id', None) or show.id
-            ts = first_seen.get(gkey)
-            if ts is None:
-                continue
-            try:
-                actors_list = json.loads(show.actors) if show.actors else []
-                if not isinstance(actors_list, list):
-                    actors_list = []
-            except json.JSONDecodeError:
-                actors_list = []
-            for actor in actors_list:
-                if not isinstance(actor, str) or not actor.strip():
-                    continue
-                name = actor.strip()
-                lower = name.lower()
-                if any(title in lower for title in titles_to_skip):
-                    continue
-                prev = artist_first_seen.get(name)
-                if prev is None or ts < prev:
-                    artist_first_seen[name] = ts
+    first_seen = report_data.first_seen
+    artist_first_seen = report_data.artist_first_seen
 
     # Форматирование результата в зависимости от типа отчёта
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
@@ -325,7 +269,11 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_SALES_LINE'].format(
-                    index=i, name=name, gross=gross, net=net, tracking=track
+                    index=i,
+                    name=escape(str(name)),
+                    gross=gross,
+                    net=net,
+                    tracking=track,
                 )
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_artists_sales']:
@@ -338,17 +286,12 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_ARTISTS_SALES_LINE'].format(
-                    index=i, name=artist, sold=sold
+                    index=i, name=escape(str(artist)), sold=sold
                 )
                 + track
             )
     elif report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_speed']:
-        # Создаем маппинг show_id -> is_deleted для определения статуса
-        show_status_map = {}
-        for show in all_shows:
-            group_key = getattr(show, 'show_id', None) or show.id
-            is_deleted = getattr(show, 'is_deleted', False)
-            show_status_map[group_key] = is_deleted
+        show_status_map = report_data.show_status
 
         for i, (name, rate_sec, _id) in enumerate(results, 1):
             rate_day = rate_sec * 60 * 60 * 24
@@ -364,7 +307,7 @@ async def cmd_generate_top_report_month(
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_SPEED_LINE'].format(
                     index=i,
-                    name=name,
+                    name=escape(str(name)),
                     status=status,
                     speed=rate_day,
                     unit=LEXICON_RU['SALES_SPEED_UNIT_PER_DAY'],
@@ -381,7 +324,7 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_RETURNS_LINE'].format(
-                    index=i, name=name, returns=returns
+                    index=i, name=escape(str(name)), returns=returns
                 )
                 + track
             )
@@ -399,7 +342,7 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_RETURN_RATE_LINE'].format(
-                    index=i, name=name, percent=percent
+                    index=i, name=escape(str(name)), percent=percent
                 )
                 + track
             )
@@ -411,8 +354,8 @@ async def cmd_generate_top_report_month(
         refunds = results.get('refunds', [])
         show_names = results.get('show_names', [])
 
-        # Ограничиваем количество дат для отображения
-        MAX_DATES_TO_SHOW = 15  # Показываем максимум 15 дат
+        # Limit the displayed dates while retaining totals for the full period.
+        MAX_DATES_TO_SHOW = 15
 
         # Показываем данные по датам
         for i, date in enumerate(dates[:MAX_DATES_TO_SHOW]):
@@ -421,14 +364,14 @@ async def cmd_generate_top_report_month(
             refund = refunds[i] if i < len(refunds) else 0
             shows = show_names[i] if i < len(show_names) else []
 
-            # Форматируем список спектаклей
-            shows_text = ', '.join(shows[:3])  # Показываем первые 3
+            # Display the first three names with the remaining count.
+            shows_text = ', '.join(escape(str(name)) for name in shows[:3])
             if len(shows) > 3:
                 shows_text += f' и ещё {len(shows) - 3}...'
 
             response_lines.append(
                 LEXICON_RU['CALENDAR_PACE_DATE_LINE'].format(
-                    date=date,
+                    date=escape(str(date)),
                     gross=gross,
                     net=net,
                     refunds=refund,
@@ -465,11 +408,17 @@ async def cmd_generate_top_report_month(
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
 
 
-@analytics_router.message(StateFilter(AnalyticsStates.choosing_month))
+@analytics_router.message(
+    StateFilter(AnalyticsStates.choosing_month),
+    F.text,
+    ~F.text.in_(ADMIN_NAVIGATION),
+)
 async def cmd_generate_soldout_report(
     message: Message, session: AsyncSession, state: FSMContext
-):
-    await state.clear()
+) -> None:
+    if not message.text:
+        await message.answer(LEXICON_RU['CHOOSE_REPORT_PERIOD'])
+        return
     try:
         text = message.text.strip()
         text_parts = text.split()
@@ -485,9 +434,7 @@ async def cmd_generate_soldout_report(
     except Exception:
         await message.answer(LEXICON_RU['ERROR_MSG'])
         return
-    analytics_func = REPORTS[LEXICON_BUTTONS_RU['/report_predict_sell_out']][
-        'handler'
-    ]
+    await state.clear()
     report_title = REPORTS[LEXICON_BUTTONS_RU['/report_predict_sell_out']][
         'title'
     ]
@@ -506,18 +453,10 @@ async def cmd_generate_soldout_report(
         LEXICON_RU['WAIT_MSG'], reply_markup=analytics_main_menu_keyboard()
     )
 
-    all_shows = (await session.execute(select(Show))).scalars().all()
-    all_histories = (
-        (await session.execute(select(ShowSeatHistory))).scalars().all()
+    report_data = await AnalyticsRepository(session).report(
+        'prediction', month, year, n=10
     )
-
-    if not all_shows or not all_histories:
-        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
-        return
-
-    results = analytics_func(
-        shows=all_shows, histories=all_histories, month=month, year=year, n=10
-    )
+    results = report_data.results
 
     if not results:
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
@@ -528,10 +467,23 @@ async def cmd_generate_soldout_report(
         date_str = format_timestamp_to_date(ts, include_year=True)
         response_lines.append(
             LEXICON_RU['PREDICT_SELL_OUT_LINE'].format(
-                index=i, name=name, show_date=show_date, date=date_str
+                index=i,
+                name=escape(str(name)),
+                show_date=escape(str(show_date)),
+                date=date_str,
             )
         )
-    await message.answer('\n\n'.join(response_lines))
+    await send_chunks_answer(message, '\n\n'.join(response_lines))
+
+
+@analytics_router.message(
+    StateFilter(
+        AnalyticsStates.choosing_month_for_top, AnalyticsStates.choosing_month
+    ),
+    ~F.text.in_(ADMIN_NAVIGATION),
+)
+async def cmd_invalid_report_period(message: Message) -> None:
+    await message.answer(LEXICON_RU['CHOOSE_REPORT_PERIOD'])
 
 
 # Функция для форматирования timestamp в читаемую дату

@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import logging
 
 from aiogram import Bot
@@ -18,7 +17,6 @@ from telegram.middlewares.profticket import ProfticketSessionMiddleware
 from telegram.middlewares.throttling import ThrottlingMiddleware
 from telegram.utils.startup import (
     get_token,
-    handle_signals,
     on_shutdown,
     on_startup,
     setup_dispatcher,
@@ -50,9 +48,9 @@ async def main() -> None:
     logger.info(LEXICON_LOGS['PROFTICKET_INITIALIZED'])
 
     dp.update.middleware(DbSessionMiddleware(session_pool=session_pool))
-    dp.update.middleware(ThrottlingMiddleware())
-    dp.update.middleware(BanMiddleware())
     dp.update.middleware(UserLoggingMiddleware())
+    dp.update.middleware(BanMiddleware())
+    dp.update.middleware(ThrottlingMiddleware())
     dp.update.middleware(ProfticketSessionMiddleware(profticket))
 
     show_update_service = ShowUpdateService(
@@ -66,27 +64,25 @@ async def main() -> None:
         update_task = asyncio.create_task(show_update_service.update_loop())
         await on_startup(bot, settings.ADMIN_ID)
         await dp.start_polling(bot)
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt, SystemExit:
         logger.info(LEXICON_LOGS['BOT_STOPPED_BY_USER'])
     except Exception as e:
         logger.exception(LEXICON_LOGS['BOT_ERROR'].format(str(e)))
         raise
     finally:
-        if update_task is not None:
-            update_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await update_task
         try:
             await on_shutdown(bot, settings.ADMIN_ID, update_task)
         finally:
-            if isinstance(profticket, ErmolovaInfo):
-                await profticket.aclose()
-            else:
-                await profticket.client.aclose()
+            try:
+                if isinstance(profticket, ErmolovaInfo):
+                    await profticket.aclose()
+                else:
+                    await profticket.client.aclose()
+            finally:
+                await context_data['engine'].dispose()
 
 
 if __name__ == '__main__':
-    handle_signals()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

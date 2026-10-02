@@ -1,14 +1,11 @@
 import asyncio
 import contextlib
 import logging
-import os
-import signal
 import sys
 
 import coloredlogs
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from dotenv import load_dotenv
 
 from config import settings
 from telegram.handlers import (
@@ -40,12 +37,6 @@ def setup_logging() -> None:
     )
 
 
-def handle_signals() -> None:
-    """Sets up signal handlers for graceful shutdown."""
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(sig, lambda signum, frame: None)
-
-
 async def setup_dispatcher() -> Dispatcher:
     """
     Configures and returns the dispatcher with all routers.
@@ -73,16 +64,18 @@ async def on_startup(bot: Bot, admin_id: int) -> None:
         bot: Bot instance
         admin_id: Admin user ID for notifications
     """
+    await bot.delete_webhook(drop_pending_updates=False)
     try:
-        await bot.delete_webhook(drop_pending_updates=True)
         await set_native_menu(bot)
+    except Exception as e:
+        logger.warning('Unable to configure the bot menu: %s', e)
+    try:
         await bot.send_message(
             admin_id, LEXICON_LOGS['BOT_STARTED'].format(admin_id)
         )
-        logger.info(LEXICON_LOGS['BOT_STARTED'].format(admin_id))
     except Exception as e:
         logger.error(LEXICON_LOGS['ERROR_ON_STARTUP'].format(str(e)))
-        raise
+    logger.info(LEXICON_LOGS['BOT_STARTED'].format(admin_id))
 
 
 async def on_shutdown(
@@ -98,14 +91,21 @@ async def on_shutdown(
     """
     try:
         await bot.send_message(admin_id, LEXICON_LOGS['BOT_STOPPED'])
-        if update_task and not update_task.done():
-            update_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await update_task
-        await bot.session.close()
-        logger.info(LEXICON_LOGS['BOT_SHUTDOWN_COMPLETE'])
     except Exception as e:
         logger.error(LEXICON_LOGS['ERROR_ON_SHUTDOWN'].format(str(e)))
+    finally:
+        try:
+            if update_task is not None:
+                if not update_task.done():
+                    update_task.cancel()
+                try:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await update_task
+                except Exception as e:
+                    logger.error('Background update task failed: %s', e)
+        finally:
+            await bot.session.close()
+            logger.info(LEXICON_LOGS['BOT_SHUTDOWN_COMPLETE'])
 
 
 def get_token() -> str:
@@ -115,9 +115,9 @@ def get_token() -> str:
     Returns:
         str: Bot token
     """
-    load_dotenv()
     return (
-        settings.TEST_BOT_TOKEN
-        if os.getenv('IN_DOCKER') != 'true'
-        else settings.BOT_TOKEN
+        settings.BOT_TOKEN
+        if str(settings.IN_DOCKER).strip().lower()
+        in {'1', 'true', 'yes', 'on'}
+        else settings.TEST_BOT_TOKEN
     )

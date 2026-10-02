@@ -6,9 +6,9 @@ from datetime import datetime
 import pytz
 from aiogram import Bot
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from config import settings
 from services.ermolova import ErmolovaInfo
@@ -22,7 +22,7 @@ timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
 class ShowUpdateService:
     def __init__(
         self,
-        session_maker,
+        session_maker: async_sessionmaker[AsyncSession],
         profticket: ProfticketsInfo | ErmolovaInfo,
         bot: Bot,
     ) -> None:
@@ -31,10 +31,12 @@ class ShowUpdateService:
         self.bot = bot
         self.month_errors: dict[tuple[int, int], int] = {}
 
-    async def _notify_admin(self, message: str):
+    async def _notify_admin(self, message: str) -> None:
         """Send a notification to the admin"""
         try:
-            await self.bot.send_message(settings.ADMIN_ID, message)
+            await self.bot.send_message(
+                settings.ADMIN_ID, message, parse_mode=None
+            )
         except Exception as e:
             logger.error(f'Error sending notification to admin: {e}')
 
@@ -66,7 +68,7 @@ class ShowUpdateService:
 
             current_time = int(datetime.now(timezone).timestamp())
 
-            # Получаем текущие данные о местах
+            # Read the previous verified inventory for this month.
             current_shows = await session.execute(
                 select(Show).where(
                     Show.month == month,
@@ -78,7 +80,7 @@ class ShowUpdateService:
                 show.id: show.seats for show in current_shows.scalars()
             }
 
-            # Подготавливаем данные для обновления
+            # Prepare the complete monthly snapshot.
             for event_id, show_data in shows.items():
                 show_values = {
                     'id': event_id,
@@ -119,7 +121,7 @@ class ShowUpdateService:
                     'is_deleted': False,
                 }
 
-                # Используем insert().on_conflict_do_update()
+                # Restore returning events with the same stable identity.
                 stmt = insert(Show).values(show_values)
                 stmt = stmt.on_conflict_do_update(
                     index_elements=['id'], set_=show_values
@@ -135,7 +137,7 @@ class ShowUpdateService:
                         )
                     )
 
-            # Мягко удаляем устаревшие записи
+            # Reconcile removed events only after a complete collection.
             all_event_ids = list(shows.keys())
             await session.execute(
                 Show.__table__.update()
@@ -170,16 +172,36 @@ class ShowUpdateService:
 
             return False
 
-    async def update_loop(self):
+    async def _archive_past_months(
+        self, session: AsyncSession, current_date: datetime
+    ) -> None:
+        await session.execute(
+            Show.__table__.update()
+            .where(
+                or_(
+                    Show.year < current_date.year,
+                    and_(
+                        Show.year == current_date.year,
+                        Show.month < current_date.month,
+                    ),
+                ),
+                Show.is_deleted.is_(False),
+            )
+            .values(is_deleted=True)
+        )
+        await session.commit()
+
+    async def update_loop(self) -> None:
         logger.info('Starting update loop service')
         while True:
             try:
                 async with self.session_maker() as session:
-                    # Проверяем и обновляем 3 месяца
+                    current_date = datetime.now(timezone)
+                    await self._archive_past_months(session, current_date)
+                    has_errors = False
+                    # Refresh current and upcoming months independently.
                     for i in range(3):
-                        check_date = datetime.now(timezone) + relativedelta(
-                            months=i
-                        )
+                        check_date = current_date + relativedelta(months=i)
                         month = check_date.month
                         year = check_date.year
 
@@ -192,9 +214,16 @@ class ShowUpdateService:
 
                         if not is_fresh:
                             logger.info(f'Updating data for {month}/{year}')
-                            await self._update_month_data(session, month, year)
+                            updated = await self._update_month_data(
+                                session, month, year
+                            )
+                            has_errors |= not updated
 
-                    wait_time = settings.UPDATE_INTERVAL
+                    wait_time = (
+                        settings.ERROR_RETRY_INTERVAL
+                        if has_errors
+                        else settings.UPDATE_INTERVAL
+                    )
                     logger.info(
                         f'Waiting {wait_time} seconds before next check'
                     )

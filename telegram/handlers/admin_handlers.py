@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime
+from html import escape
 
 import pytz
 from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +25,8 @@ admin_router.message.filter(IsAdmin())
 
 
 @admin_router.message(F.text == LEXICON_BUTTONS_RU['/admin_menu'])
-async def cmd_admin_menu(message: Message):
+async def cmd_admin_menu(message: Message, state: FSMContext) -> None:
+    await state.clear()
     await message.answer(
         LEXICON_RU['ADMIN_MENU_TITLE'],
         reply_markup=admin_main_menu_keyboard(),
@@ -31,7 +34,7 @@ async def cmd_admin_menu(message: Message):
 
 
 @admin_router.message(F.text == LEXICON_BUTTONS_RU['/admin_stats'])
-async def cmd_admin_stats(message: Message, session: AsyncSession):
+async def cmd_admin_stats(message: Message, session: AsyncSession) -> None:
     """
     Отчёт по статистике пользователей для админа.
     Сейчас: количество пользователей, суммарное число запросов и топ-10
@@ -71,9 +74,9 @@ async def cmd_admin_stats(message: Message, session: AsyncSession):
     if top_users:
         for i, u in enumerate(top_users, 1):
             cnt = u.search_count or 0
-            uname = f'@{u.username}' if u.username else '—'
-            fname = u.bot_full_name or '—'
-            choice = (u.spectacle_full_name or '—').title()
+            uname = f'@{escape(u.username)}' if u.username else '—'
+            fname = escape(u.bot_full_name or '—')
+            choice = escape((u.spectacle_full_name or '—').title())
             lines.append(
                 f'{i}.\n'
                 f'• Имя: <b>{fname}</b>\n'
@@ -97,7 +100,9 @@ async def cmd_admin_back_to_main(message: Message, session: AsyncSession):
 
 
 @admin_router.message(F.text == LEXICON_BUTTONS_RU['/admin_users'])
-async def cmd_admin_users_overview(message: Message, session: AsyncSession):
+async def cmd_admin_users_overview(
+    message: Message, session: AsyncSession
+) -> None:
     pytz.timezone(settings.DEFAULT_TIMEZONE)
 
     total_users = (
@@ -113,7 +118,13 @@ async def cmd_admin_users_overview(message: Message, session: AsyncSession):
             select(func.count()).where(User.bot_blocked.is_(True))
         )
     ).scalar_one()
-    active_users = total_users - banned_users - blocked_users
+    active_users = (
+        await session.execute(
+            select(func.count()).where(
+                User.banned.is_not(True), User.bot_blocked.is_not(True)
+            )
+        )
+    ).scalar_one()
 
     admin_flags = (
         await session.execute(select(func.count()).where(User.admin.is_(True)))
@@ -187,9 +198,9 @@ async def cmd_admin_users_overview(message: Message, session: AsyncSession):
     if top_search:
         for i, u in enumerate(top_search, 1):
             cnt = u.search_count or 0
-            uname = f'@{u.username}' if u.username else '—'
-            fname = u.bot_full_name or '—'
-            choice = (u.spectacle_full_name or '—').title()
+            uname = f'@{escape(u.username)}' if u.username else '—'
+            fname = escape(u.bot_full_name or '—')
+            choice = escape((u.spectacle_full_name or '—').title())
             lines.append(
                 f'{i}.\n'
                 f'• Имя: <b>{fname}</b>\n'
@@ -206,9 +217,9 @@ async def cmd_admin_users_overview(message: Message, session: AsyncSession):
     if top_throttling:
         for i, u in enumerate(top_throttling, 1):
             cnt = u.throttling or 0
-            uname = f'@{u.username}' if u.username else '—'
-            fname = u.bot_full_name or '—'
-            choice = (u.spectacle_full_name or '—').title()
+            uname = f'@{escape(u.username)}' if u.username else '—'
+            fname = escape(u.bot_full_name or '—')
+            choice = escape((u.spectacle_full_name or '—').title())
             lines.append(
                 f'{i}.\n'
                 f'• Имя: <b>{fname}</b>\n'
@@ -224,7 +235,9 @@ async def cmd_admin_users_overview(message: Message, session: AsyncSession):
 
 
 @admin_router.message(F.text == LEXICON_BUTTONS_RU['/admin_prefs'])
-async def cmd_admin_user_prefs(message: Message, session: AsyncSession):
+async def cmd_admin_user_prefs(
+    message: Message, session: AsyncSession
+) -> None:
     # агрегируем выбор актёров/актрис
     name_expr = func.lower(func.trim(User.spectacle_full_name))
     total_users = (
@@ -272,7 +285,7 @@ async def cmd_admin_user_prefs(message: Message, session: AsyncSession):
     lines.append('\n<b>Топ-выборов (до 50):</b>')
     for i, row in enumerate(result, 1):
         name, cnt = row[0], row[1]
-        display = (name or '').title()
+        display = escape((name or '').title())
         lines.append(f'{i}.\n• Имя: {display}\n• Выборов: {cnt}')
 
     # примеры пользователей для первых 5
@@ -294,11 +307,11 @@ async def cmd_admin_user_prefs(message: Message, session: AsyncSession):
             .all()
         )
         if users:
-            lines.append(f'{(name or "").title()}:')
+            lines.append(f'{escape((name or "").title())}:')
             for u in users:
-                uname = f'@{u.username}' if u.username else '—'
-                fname = u.bot_full_name or '—'
-                choice = (u.spectacle_full_name or '—').title()
+                uname = f'@{escape(u.username)}' if u.username else '—'
+                fname = escape(u.bot_full_name or '—')
+                choice = escape((u.spectacle_full_name or '—').title())
                 lines.append(
                     f'• Имя: {fname} | Username: {uname} | ID: {u.user_id} | 🎭 {choice}'
                 )
@@ -322,8 +335,8 @@ async def cmd_admin_user_prefs(message: Message, session: AsyncSession):
     lines.append('\n<b>Без выбора (примеры до 10):</b>')
     if no_choice_users:
         for u in no_choice_users:
-            uname = f'@{u.username}' if u.username else '—'
-            fname = u.bot_full_name or '—'
+            uname = f'@{escape(u.username)}' if u.username else '—'
+            fname = escape(u.bot_full_name or '—')
             cnt = u.search_count or 0
             lines.append(
                 f'• Имя: {fname} | Username: {uname} | ID: {u.user_id} | Запросов: {cnt}'

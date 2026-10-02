@@ -6,8 +6,10 @@ from sqlalchemy import (
     Boolean,
     Column,
     ForeignKey,
+    Index,
     Integer,
     String,
+    false,
     func,
 )
 
@@ -81,11 +83,16 @@ class Show(Base):
     updated_at = Column(
         Integer
     )  # время последнего обновления (Unix timestamp)
-    is_deleted = Column(Boolean, default=False)  # мягкое удаление
+    is_deleted = Column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
 
 class ShowSeatHistory(Base):
     __tablename__ = 'show_seat_history'
+    __table_args__ = (
+        Index('ix_show_seat_history_show_time', 'show_id', 'timestamp', 'id'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     show_id = Column(String, ForeignKey('shows.id'), index=True)

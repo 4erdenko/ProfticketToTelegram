@@ -16,7 +16,11 @@ from config import settings
 from telegram.db import User
 from telegram.db.models import Show
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS, LEXICON_MONTHS_RU
-from telegram.tg_utils import get_result_message, parse_show_date
+from telegram.tg_utils import (
+    get_result_message,
+    normalize_actor_name,
+    parse_show_date,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +198,7 @@ async def get_shows_from_db(
     session: AsyncSession,
     month: int,
     year: int,
-    actor_filter=None,
+    actor_filter: str | None = None,
     descending: bool = False,
 ) -> str:
     """
@@ -227,10 +231,16 @@ async def get_shows_from_db(
     msg = ''
     show_count = 0
     last_update = 0
+    if actor_filter:
+        actor_filter = normalize_actor_name(actor_filter)
 
     for show in shows:
         actors = json.loads(show.actors)
-        actors_lower = [actor.lower().strip() for actor in actors if actor]
+        actors_lower = [
+            normalize_actor_name(actor)
+            for actor in actors
+            if isinstance(actor, str) and actor
+        ]
 
         if actor_filter and actor_filter not in actors_lower:
             continue
@@ -279,4 +289,4 @@ async def setup_database() -> tuple[async_sessionmaker, dict[str, Any]]:
     )
     logger.info(LEXICON_LOGS['SESSION_MAKER_INITIALIZED'])
 
-    return session_pool, {'session_pool': session_pool}
+    return session_pool, {'session_pool': session_pool, 'engine': engine}
