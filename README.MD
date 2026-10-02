@@ -1,6 +1,6 @@
 # Profticket To Telegram — бот театральной афиши и аналитики
 
-![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Python](https://img.shields.io/badge/Python-3.14-blue)
 ![Aiogram](https://img.shields.io/badge/Aiogram-3.x-0aa)
 ![Ruff](https://img.shields.io/badge/Ruff-lint%20%26%20format-ff69b4)
 ![Tests](https://img.shields.io/badge/Tests-pytest-informational)
@@ -63,8 +63,9 @@ Telegram‑бот для показа спектаклей/событий из P
 
 ## Требования
 
-- Python 3.11
-- PostgreSQL 14+
+- Python 3.14 (устанавливается через uv)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- PostgreSQL 17 (версия образа в Compose)
 
 ### Источник афиши Ермоловой
 
@@ -107,33 +108,48 @@ ssh -N -D 127.0.0.1:18080 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 
 
 События нового источника имеют отдельные строковые ID с префиксом `ermolova:`;
 ID спектаклей — отрицательные ID страниц театра. История Profticket остаётся
-под прежними ID и не объединяется с новыми событиями. Миграция БД не нужна:
-используются существующие nullable-поля. Новая аналитика накапливается после
+под прежними ID и не объединяется с новыми событиями. Для смены источника
+используются существующие поля. Новая аналитика накапливается после
 первых успешных снимков; ранее отсутствовавшую историю восстановить нельзя.
 Состав на сайте может включать нескольких исполнителей одной роли, поэтому
 персональный фильтр не подтверждает конкретный состав на выбранную дату.
 
 ## Установка
 
-1) Создайте окружение и установите зависимости:
-```
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+1) Установите Python и синхронизируйте окружение:
+```sh
+uv python install
+uv sync --locked
 ```
 
+Версия Python закреплена в `.python-version`. Зависимости объявлены в
+`pyproject.toml`, точные версии закреплены в `uv.lock`. Команда создаёт `.venv`
+и устанавливает также инструменты разработки
+из группы `dev`. Активация окружения для команд `uv run` не требуется.
+
 2) Скопируйте `.env.example` в `.env` и заполните:
-```
+```sh
 cp .env.example .env
 ```
 
-3) (Опционально) Примените миграции:
-```
-alembic upgrade head
+3) Примените миграции перед запуском:
+```sh
+uv run --locked alembic upgrade head
 ```
 
+Миграция `a137bd92c410` восстанавливает `is_deleted=False` для старых NULL,
+добавляет обязательное значение/default и индекс истории
+`(show_id, timestamp, id)`. История мест сохраняется. Перед обновлением рабочей
+БД сделайте резервную копию; создание индекса может временно задержать запись.
+
+Прошлые месяцы архивируются автоматически. Исторические отчёты включают эти
+события. Продажи и возвраты агрегируются в PostgreSQL; скорость использует
+последние сутки, прогноз — последние семь дней. Для старого выбранного месяца
+скорость считается по последним суткам наблюдений каждого события.
+
 4) Запустите бота:
-```
-python main.py
+```sh
+uv run --locked main.py
 ```
 
 ## Переменные окружения
@@ -145,19 +161,37 @@ python main.py
 ## Docker
 
 Быстрый старт:
+```sh
+docker compose up -d --wait profticket_postgres
+docker compose run --rm --no-deps profticket_bot_service alembic upgrade head
+docker compose up -d profticket_bot_service
 ```
-docker-compose up -d
+Поднимет Postgres, применит схему и запустит бот. Проверьте переменные окружения.
+
+Для проверки локальной сборки:
+```sh
+docker build -t profticket_to_tg:local .
 ```
-Поднимет Postgres и бот. Проверьте переменные окружения.
+
+Образ использует Python 3.14 и зависимости из `uv.lock` без группы `dev`.
+Compose запускает опубликованный образ; локальная сборка сама по себе его
+не заменяет.
 
 ## Тесты и линтинг
 
-```
-pytest -q
-ruff format . && ruff check --fix .
+```sh
+uv run --locked pytest -q
+uv run --locked ruff format --check .
+uv run --locked ruff check .
 ```
 
 Тесты быстрые, сетевые вызовы замоканы.
+
+Для форматирования и автоматического исправления замечаний:
+```sh
+uv run --locked ruff format .
+uv run --locked ruff check --fix .
+```
 
 ## Команды и меню
 
@@ -173,8 +207,11 @@ stdout через `coloredlogs` на уровне INFO.
 ## Вклад
 
 Перед PR проверьте локально:
-- `ruff format . && ruff check --fix .`
-- `pytest -q`
+
+- `uv run --locked ruff format --check .`
+- `uv run --locked ruff check .`
+- `uv run --locked pytest -q`
+- При изменении зависимостей обновляйте `pyproject.toml` и `uv.lock` вместе.
 - Соблюдайте Conventional Commits (например: `feat(telegram): ...`).
 - Не включайте секреты в коммиты; используйте `.env`.
 

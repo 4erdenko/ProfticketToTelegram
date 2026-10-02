@@ -7,8 +7,14 @@ services:
   profticket_postgres:
     container_name: profticket_db
     restart: unless-stopped
-    image: postgres:latest
+    image: postgres:17
     <<: *default-env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -19,7 +25,8 @@ services:
   profticket_bot_service:
     pull_policy: always
     depends_on:
-      - profticket_postgres
+      profticket_postgres:
+        condition: service_healthy
     restart: unless-stopped
     container_name: profticket_telegram_bot
     image: 4erdenko/profticket_to_tg

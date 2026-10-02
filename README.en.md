@@ -1,6 +1,6 @@
 # Profticket To Telegram — theater shows and analytics bot
 
-![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Python](https://img.shields.io/badge/Python-3.14-blue)
 ![Aiogram](https://img.shields.io/badge/Aiogram-3.x-0aa)
 ![Ruff](https://img.shields.io/badge/Ruff-lint%20%26%20format-ff69b4)
 ![Tests](https://img.shields.io/badge/Tests-pytest-informational)
@@ -62,30 +62,46 @@ Admin panel is available for `ADMIN_ID` and users with `User.admin=True`.
 
 ## Requirements
 
-- Python 3.11
-- PostgreSQL 14+
+- Python 3.14 (managed by uv)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- PostgreSQL 17 (the image version used by Compose)
 
 ## Setup
 
-1) Create venv and install deps:
-```
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+1) Install Python and sync the environment:
+```sh
+uv python install
+uv sync --locked
 ```
 
+The Python version is pinned in `.python-version`. Dependencies are declared in
+`pyproject.toml`, with exact versions recorded in `uv.lock`. The command creates
+`.venv` and includes development tools from the
+`dev` group. Commands using `uv run` do not require activating the environment.
+
 2) Copy `.env.example` to `.env` and fill values:
-```
+```sh
 cp .env.example .env
 ```
 
-3) (Optional) Apply migrations:
-```
-alembic upgrade head
+3) Apply migrations before starting the bot:
+```sh
+uv run --locked alembic upgrade head
 ```
 
+Migration `a137bd92c410` backfills legacy NULL deletion flags to false, adds
+a non-null constraint/default and a `(show_id, timestamp, id)` history index.
+Seat history is preserved. Back up a production database before upgrading;
+index creation may temporarily block writes.
+
+Past months are archived automatically and remain available in historical
+reports. Sales and returns are aggregated in PostgreSQL. Speed uses the last
+24 hours; prediction uses seven days. For a selected historical month, speed
+uses the last 24 hours of observations for each event.
+
 4) Run the bot:
-```
-python main.py
+```sh
+uv run --locked main.py
 ```
 
 ## Environment variables
@@ -97,19 +113,37 @@ See `.env.example`. Minimal: `BOT_TOKEN`/`TEST_BOT_TOKEN`, `ADMIN_ID`, `DB_URL`,
 ## Docker
 
 Quick start:
+```sh
+docker compose up -d --wait profticket_postgres
+docker compose run --rm --no-deps profticket_bot_service alembic upgrade head
+docker compose up -d profticket_bot_service
 ```
-docker-compose up -d
+Starts Postgres, applies the schema and starts the bot image. Provide env vars.
+
+To verify a local image build:
+```sh
+docker build -t profticket_to_tg:local .
 ```
-Starts Postgres and the bot image. Ensure env vars are provided.
+
+The image uses Python 3.14 and dependencies from `uv.lock` without the `dev`
+group. Compose starts the published image; building locally does not replace
+that image automatically.
 
 ## Tests and linting
 
-```
-pytest -q
-ruff format . && ruff check --fix .
+```sh
+uv run --locked pytest -q
+uv run --locked ruff format --check .
+uv run --locked ruff check .
 ```
 
 Tests are fast and deterministic; network calls are stubbed/mocked.
+
+To format code and apply automatic lint fixes:
+```sh
+uv run --locked ruff format .
+uv run --locked ruff check --fix .
+```
 
 ## Commands and menus
 
@@ -125,8 +159,11 @@ via `coloredlogs` at INFO level.
 ## Contributing
 
 Before submitting a PR:
-- `ruff format . && ruff check --fix .`
-- `pytest -q`
+
+- `uv run --locked ruff format --check .`
+- `uv run --locked ruff check .`
+- `uv run --locked pytest -q`
+- Update `pyproject.toml` and `uv.lock` together when changing dependencies.
 - Follow Conventional Commits (e.g., `feat(telegram): ...`).
 - Never commit secrets; use `.env`.
 
@@ -172,6 +209,6 @@ empty refreshes preserve the previous monthly snapshot and alert once after
 three failures for that month, resetting after a successful refresh.
 
 New performances use `ermolova:` IDs and negative website show IDs, separate from
-legacy Profticket history. No database migration is required. New sales analytics
+legacy Profticket history. Switching sources uses existing fields. New sales analytics
 need new observations; missing historical observations cannot be reconstructed.
 Published casts can include alternate performers rather than a date-specific cast.

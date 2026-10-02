@@ -4,114 +4,106 @@ on:
   push:
     branches:
       - master
-    paths-ignore:
-      - '.github/workflows/**'
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   ruff:
     name: Ruff (lint and format checks)
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7.0.1
 
-      - name: Ruff lint (PR annotations)
-        uses: astral-sh/ruff-action@v3
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v10.2.0
         with:
-          version: "0.12.10"
-          args: "check --output-format=github ."
+          version: '0.12.22'
+          python-version: '3.14.8'
+          enable-cache: true
 
-      - name: Ruff format check (with small diff)
-        uses: astral-sh/ruff-action@v3
-        with:
-          version: "0.12.10"
-          args: "format --check --diff ."
+      - name: Ruff lint
+        run: uv run --locked ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: uv run --locked ruff format --check --diff .
+
   build-test:
+    name: Tests and Docker build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
 
-      - name: Cache pip
-        uses: actions/cache@v4
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v10.2.0
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          version: '0.12.22'
+          python-version: '3.14.8'
+          enable-cache: true
 
+      - name: Run tests
+        run: uv run --locked pytest -q
 
-      - name: Создаём .env для docker-compose
-        run: |
-          cat <<'EOF' > .env
-          ${{ secrets.ENV }}
-          EOF
-          sed -i '/^IN_DOCKER=/d' .env
-          echo 'IN_DOCKER=false' >> .env
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
 
-      - name: Start stack with docker compose
-        env:
-          IN_DOCKER: "false"
-        run: docker compose up -d --build
-
-
-      - name: Tear down
-        if: always()
-        run: docker compose down --remove-orphans --volumes
+      - name: Build current checkout
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          push: false
 
   build-push:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     needs: [ruff, build-test]
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v5
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      -
-        name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.4.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4.6.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Build and push
-        uses: docker/build-push-action@v6
+
+      - name: Build and push
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/profticket_to_tg:${{ github.sha }}
+
   deploy:
     needs: build-push
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
 
-      - name: Copy code via ssh
-        uses: appleboy/scp-action@master
+      - name: Copy Compose files
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.HOST }}
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.HOST_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "docker-compose.yml,docker-compose.mosbilet.yml"
-          target: "${{ secrets.FOLDER_PATH }}"
+          source: 'docker-compose.yml,docker-compose.mosbilet.yml'
+          target: '${{ secrets.FOLDER_PATH }}'
 
-      - name: Executing remote ssh commands to deploy
-        uses: appleboy/ssh-action@master
+      - name: Apply migrations and deploy
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.HOST }}
           port: ${{ secrets.SSH_PORT }}
@@ -133,6 +125,6 @@ jobs:
             }
             compose config --quiet
             compose pull profticket_bot_service
+            compose run --rm --no-deps profticket_bot_service alembic upgrade head
             compose up -d --no-deps profticket_bot_service
-            compose exec -T profticket_bot_service alembic upgrade head
             sudo docker image prune -f
