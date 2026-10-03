@@ -1,10 +1,10 @@
 from config import settings
 
-INVENTORY_UNKNOWN = 'Наличие и начало продаж — на сайте'
+INVENTORY_UNKNOWN = 'Билеты на сайте'
 PERFORMANCE_FALLBACKS = {
     'name': 'Название не указано',
     'date': 'Дата уточняется',
-    'inventory': 'Наличие билетов неизвестно',
+    'inventory': 'Количество билетов неизвестно',
 }
 
 LEXICON_MONTHS_RU: dict[str, str] = {
@@ -25,92 +25,95 @@ LEXICON_MONTHS_RU: dict[str, str] = {
 LEXICON_RU: dict[str, str] = {
     # Основные сообщения
     'MAIN_MENU': 'Главное меню',
-    'CHOOSE_MONTH': 'Выберите месяц',
+    'CHOOSE_MONTH': 'На какой месяц показать спектакли?',
     'ERROR_MSG': 'Произошла ошибка, попробуйте ещё раз через минутку.',
-    'WAIT_MSG': 'Пожалуйста, подождите, идёт сбор данных.',
+    'WAIT_MSG': 'Собираю данные, это займёт немного времени…',
     'NONE_SHOWS_THIS_MONTH': 'Спектаклей в этом месяце нет.',
     'HELP_CONTACT': f'Если нужна помощь, напиши сюда: {settings.ADMIN_USERNAME}',
     # Сообщения для работы с актёрами
-    'SET_NAME': (
-        'Введите: <b>Имя Фамилия</b>\n'
-        'Например: <b>Олег Меньшиков</b>\n\n'
-        'Без каких либо других знаков и точек, именно в таком порядке.'
-    ),
+    'SET_NAME': ('Как зовут актёра?\nНапример: <b>Олег Меньшиков</b>'),
     'WRONG_FIO': (
-        'Некорректное имя!\n\n'
-        'Введите имя и фамилию через пробел.\n'
-        'Либо нажмите на /cancel, чтобы выйти.'
+        'Напишите имя и фамилию через пробел.\n'
+        'Например: <b>Олег Меньшиков</b>\n'
+        'Отмена: /cancel'
     ),
     'SET_NAME_SUCCESS': (
-        'Отлично, теперь вы можете увидеть расписание '
-        'спектаклей только с участием: <b>{}</b>'
+        '🎭 Выбрали: <b>{}</b>\n'
+        'Теперь можно посмотреть спектакли с этим актёром.'
     ),
     # Системные сообщения
     'MAINTENANCE': 'Бот на техническом обслуживании.',
     'THROTTLING': (
-        'Воу-воу! Слишком много запросов от тебя, подыши.\n\n'
-        '<b>Техника дыхания (20 секунд):</b>\n'
-        '1. Сядьте в удобное положение.\n'
-        '2. Закройте глаза и сосредоточьтесь на дыхании.\n'
-        '3. Глубоко вдохните через нос в течение 4 секунд.\n'
-        '4. Задержите дыхание на 4 секунды.\n'
-        '5. Медленно выдохните через рот в течение 4 секунд.\n'
-        '6. Подождите 4 секунды перед следующим вдохом.\n'
-        '7. Повторяйте эту последовательность в течение 20 секунд.\n\n'
+        f'Слишком много нажатий. Подождите {settings.TTL_IN_SEC} секунд.'
     ),
-    'TOP_ARTISTS_REPORT': 'Топ артистов по продажам',
-    'ANALYTICS_MENU_TITLE': '📊 Меню аналитики',
-    'CHOOSE_REPORT_PERIOD': '📅 Выберите период для отчета:',
-    'TOP_SHOWS_SALES_REPORT_TITLE': 'Топ спектаклей по продажам',
-    'TOP_SHOWS_SALES_FORMAT_EXPLANATION': '(валовые / чистые продажи)',
-    'TOP_SHOWS_SPEED_REPORT_TITLE': 'Топ спектаклей по скорости продаж',
-    'TOP_SHOWS_SPEED_FORMAT_EXPLANATION': '(✅ = прошедшие спектакли)',
-    'PREDICT_SELL_OUT_REPORT_TITLE': 'Прогноз sold out',
+    'TOP_ARTISTS_REPORT': '🎭 Билеты на спектакли с актёрами',
+    'ANALYTICS_MENU_TITLE': '📊 Билеты на сайте\nЧто хотите узнать?',
+    'CHOOSE_REPORT_PERIOD': '📅 За какой период показать данные?',
+    'TOP_SHOWS_SALES_REPORT_TITLE': '🎟 Где билетов стало меньше',
+    'TOP_SHOWS_SALES_FORMAT_EXPLANATION': (
+        'Считаем все уменьшения. Итог учитывает добавленные билеты.'
+    ),
+    'TOP_SHOWS_SPEED_REPORT_TITLE': '⚡️ Как быстро уходят билеты',
+    'TRENDS_REPORT_TITLE': '📈 Что с билетами',
+    'TOP_SHOWS_SPEED_FORMAT_EXPLANATION': (
+        'Среднее за последние сутки наблюдений.'
+    ),
+    'PREDICT_SELL_OUT_REPORT_TITLE': '⏳ Когда могут закончиться билеты',
     'PREDICT_SELL_OUT_LINE': (
-        '{index}. <b>{name}</b> ({show_date})\n'
-        '   \u23F3 Ожидаемый sold out: {date}'
+        '{index}. <b>{name}</b>\n'
+        '📅 {show_date}\n'
+        'Могут закончиться примерно <b>{date}</b>, если будут уходить так же.'
     ),
-    'NO_DATA_FOR_REPORT': 'Нет данных для формирования отчета за указанный период.',
-    'SALES_SPEED_UNIT_PER_DAY': 'бил./день',
-    'SOLD_OUT_AT_TIMESTAMP': 'Продано полностью в: ', # Used with datetime
-    'ALREADY_SOLD_OUT': 'Уже распродано!',
+    'NO_DATA_FOR_REPORT': 'Пока нет данных за этот период',
+    'NO_RELIABLE_FORECAST': (
+        'Пока нельзя надёжно сказать, когда закончатся билеты.\n'
+        'Посмотрите «📈 Что с билетами»: там есть остаток и изменения.'
+    ),
+    'SALES_SPEED_UNIT_PER_DAY': 'билетов в день',
+    'SOLD_OUT_AT_TIMESTAMP': 'Билетов на сайте нет с ',
+    'ALREADY_SOLD_OUT': 'Сейчас билетов на сайте нет.',
     'BACK_TO_MAIN_MENU': '↩️ Главное меню',
     'BACK_TO_ANALYTICS_MENU': '↩️ Меню аналитики',
     # Добавляем константы для новых отчётов
-    'TOP_SHOWS_RETURNS_REPORT_TITLE': 'Топ спектаклей по возвратам билетов',
-    'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': 'Топ спектаклей по проценту возвратов',
+    'TOP_SHOWS_RETURNS_REPORT_TITLE': '🎟 Где билетов стало больше',
+    'TOP_SHOWS_RETURN_RATE_REPORT_TITLE': '🔄 Сколько билетов добавляется',
     'TOP_SHOWS_SALES_LINE': (
         '{index}. <b>{name}</b>\n'
-        '   \U0001F39F Продано: <b>{gross}</b> / <b>{net}</b> бил.{tracking}'
+        'Все уменьшения: <b>{gross}</b>.\n'
+        'Итого: {net_change}.{tracking}'
     ),
     'TOP_ARTISTS_SALES_LINE': (
-        '{index}. <b>{name}</b>\n'
-        '   \U0001F39F Продаж: <b>{sold}</b> бил.'
+        '{index}. <b>{name}</b>\nБилетов стало меньше на <b>{sold}</b>.'
     ),
     'TOP_SHOWS_SPEED_LINE': (
-        '{index}. <b>{name}</b>{status}\n'
-        '   \u26A1\ufe0f Скорость: <b>{speed:.1f} {unit}</b>'
+        '{index}. <b>{name}</b>{status}\nВ среднем за день: <b>{speed}</b>.'
     ),
-    'SHOW_STATUS_PAST': ' \u2705',  # ✅ для прошедших
-    'SHOW_STATUS_CURRENT': '',       # Пусто для текущих
+    # Mark archived performances in the pace report.
+    'SHOW_STATUS_PAST': ' (архив)',
+    'SHOW_STATUS_CURRENT': '',
     'TOP_SHOWS_RETURNS_LINE': (
-        '{index}. <b>{name}</b>\n'
-        '   \u21A9\ufe0f Возвратов: <b>{returns}</b>'
+        '{index}. <b>{name}</b>\nБилетов добавилось: <b>{returns}</b>.'
     ),
     'TOP_SHOWS_RETURN_RATE_LINE': (
         '{index}. <b>{name}</b>\n'
-        '   \u21A9\ufe0f Возвратов: <b>{percent:.1f}%</b>'
+        'На каждые 100 исчезнувших билетов добавилось <b>{percent}</b>.'
     ),
-    'TRACKING_SINCE': ' с {date}г.',
-    'CALENDAR_PACE_REPORT_TITLE': 'Календарь pace продаж',
-    'CALENDAR_PACE_FORMAT_EXPLANATION': '(валовые / чистые / возвраты)',
+    'TRACKING_SINCE': '\nСчитаем с {date}.',
+    'CALENDAR_PACE_REPORT_TITLE': '📅 Билеты по датам спектаклей',
+    'CALENDAR_PACE_FORMAT_EXPLANATION': (
+        'Изменения билетов на сайте для каждой даты спектакля.'
+    ),
     'CALENDAR_PACE_DATE_LINE': (
-        '<b>{date}</b>: {gross}/{net}/{refunds} ({shows})'
+        '<b>{date}</b>\n'
+        '{shows}\n'
+        'Меньше на <b>{gross}</b>, больше на <b>{refunds}</b>.\n'
+        'Итого: {net_change}.'
     ),
     'CALENDAR_PACE_SUMMARY': (
-        '\n📊 <b>Итого за период:</b>\n'
-        '   🎟 Всего продаж: <b>{total_gross} / {total_net} / {total_refunds}</b>\n'
-        '   📈 Средний темп: <b>{avg_gross:.1f}</b> бил./день'
+        '📊 <b>Всего за период</b>\n'
+        'Меньше на <b>{total_gross}</b>, больше на <b>{total_refunds}</b>.\n'
+        'Итого: {net_change}.\n'
+        'В среднем на дату спектакля: на <b>{avg_gross}</b> меньше.'
     ),
     # Админ-меню
     'ADMIN_MENU_TITLE': '🛠 Админ-меню',
@@ -156,22 +159,25 @@ LEXICON_NATIVE_COMMANDS_RU: dict[str, str] = {
     '/help': '🆘 Нужна помощь!',
     '/set_actor': '👤Выбрать актёра/актрису',
     '/analytics': '📊 Аналитика',
+    '/subscriptions': '🔔 Подписки на спектакли и артистов',
 }
 
 LEXICON_BUTTONS_RU: dict[str, str] = {
+    '/subscriptions': '🔔 Подписки',
     '/set_fighter': '👤Выбрать актёра/актрису',
     '/shows_with': 'Спектакли с: ',
     # Analytics Menu Buttons
     '/analytics_menu': '📊 Аналитика',
     # Report Types
-    '/report_top_shows_sales': '🏆 Топ продаж (спектакли)',
-    '/report_top_shows_speed': '⚡️ Топ скорости (спектакли)',
-    '/report_predict_sell_out': '⏳ Прогноз Sold Out',
-    '/report_top_artists_sales': '🎭 Топ продаж (артисты)',
-    '/report_calendar_pace': '📅 Календарь продаж',
+    '/report_top_shows_sales': '🏆 Билетов стало меньше',
+    '/report_top_shows_speed': '⚡️ Как быстро уходят билеты',
+    '/report_trends': '📈 Что с билетами',
+    '/report_predict_sell_out': '⏳ Прогноз билетов',
+    '/report_top_artists_sales': '🎭 По актёрам',
+    '/report_calendar_pace': '📅 По датам',
     # Добавляем новые кнопки для отчётов по возвратам
-    '/report_top_shows_returns': '🔄 Топ по возвратам',
-    '/report_top_shows_return_rate': '📉 Топ по % возвратов',
+    '/report_top_shows_returns': '🔄 Билетов стало больше',
+    '/report_top_shows_return_rate': '📉 Сравнить изменения',
     # Period Choices (prefix with report type in handler or use FSM)
     '/period_all_time': '🕒 За всё время',
     '/period_current_month': '📅 Текущий месяц',
@@ -184,4 +190,21 @@ LEXICON_BUTTONS_RU: dict[str, str] = {
     '/admin_users': '👥 Пользователи',
     '/admin_prefs': '🎭 Предпочтения',
     '/admin_db': '🗄 База (шоу)',
+}
+
+LEGACY_ANALYTICS_BUTTONS = {
+    '🏆 Уменьшение билетов': '/report_top_shows_sales',
+    '⚡️ Темп изменения': '/report_top_shows_speed',
+    '📈 Тенденции': '/report_trends',
+    '🎭 Динамика по артистам': '/report_top_artists_sales',
+    '📅 Динамика по датам': '/report_calendar_pace',
+    '🔄 Пополнение квоты': '/report_top_shows_returns',
+    '📉 Пополнение / уменьшение': '/report_top_shows_return_rate',
+    '🏆 Топ продаж (спектакли)': '/report_top_shows_sales',
+    '⚡️ Топ скорости (спектакли)': '/report_top_shows_speed',
+    '⏳ Прогноз Sold Out': '/report_predict_sell_out',
+    '🎭 Топ продаж (артисты)': '/report_top_artists_sales',
+    '📅 Календарь продаж': '/report_calendar_pace',
+    '🔄 Топ по возвратам': '/report_top_shows_returns',
+    '📉 Топ по % возвратов': '/report_top_shows_return_rate',
 }

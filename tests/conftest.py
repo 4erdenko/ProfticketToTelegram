@@ -39,6 +39,7 @@ def stub_modules(monkeypatch):
     class Settings:
         COM_ID = '1'
         MAX_MSG_LEN = 100
+        TTL_IN_SEC = 20
         ADMIN_ID = 1
         ADMIN_USERNAME = 'admin'
         PROXY_URL = ''
@@ -123,7 +124,12 @@ def stub_modules(monkeypatch):
         def __init__(self, text=''):
             self.text = text
 
+    class LinkPreviewOptions:
+        def __init__(self, *, is_disabled: bool = False) -> None:
+            self.is_disabled = is_disabled
+
     aiogram_types.Message = Message
+    aiogram_types.LinkPreviewOptions = LinkPreviewOptions
     aiogram.types = aiogram_types  # Добавляем types как атрибут aiogram
     modules['aiogram'] = aiogram
     modules['aiogram.types'] = aiogram_types

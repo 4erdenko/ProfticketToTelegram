@@ -8,6 +8,7 @@ from config import settings
 from services.ermolova import ErmolovaInfo
 from services.profticket.profticket_api import ProfticketsInfo
 from services.profticket.profticket_snapshoter import ShowUpdateService
+from services.subscriptions import SubscriptionService
 from telegram.db.user_operations import setup_database
 from telegram.lexicon.lexicon_ru import LEXICON_LOGS
 from telegram.middlewares.banhammer import BanMiddleware
@@ -60,10 +61,14 @@ async def main() -> None:
     )
 
     update_task = None
+    subscription_task = None
     try:
         update_task = asyncio.create_task(show_update_service.update_loop())
+        subscription_task = asyncio.create_task(
+            SubscriptionService(session_pool, bot).run()
+        )
         await on_startup(bot, settings.ADMIN_ID)
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, close_bot_session=False)
     except KeyboardInterrupt, SystemExit:
         logger.info(LEXICON_LOGS['BOT_STOPPED_BY_USER'])
     except Exception as e:
@@ -71,7 +76,9 @@ async def main() -> None:
         raise
     finally:
         try:
-            await on_shutdown(bot, settings.ADMIN_ID, update_task)
+            await on_shutdown(
+                bot, settings.ADMIN_ID, update_task, subscription_task
+            )
         finally:
             try:
                 if isinstance(profticket, ErmolovaInfo):
@@ -89,3 +96,4 @@ if __name__ == '__main__':
         logger.info(LEXICON_LOGS['BOT_STOPPED_BY_KEYBOARD'])
     except Exception as e:
         logger.exception(LEXICON_LOGS['BOT_ERROR'].format(str(e)))
+        raise

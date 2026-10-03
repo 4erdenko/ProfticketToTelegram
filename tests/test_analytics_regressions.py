@@ -3,6 +3,82 @@ from pathlib import Path
 from tests.runtime_helpers import run_runtime_script
 
 
+def test_current_speed_uses_the_same_window_as_inventory_trends(
+    tmp_path: Path,
+) -> None:
+    run_runtime_script(
+        r"""
+import asyncio
+from datetime import datetime, timedelta, timezone
+from math import isclose
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from services.profticket import analytics, analytics_repository as repository
+from telegram.db import Base
+from telegram.db.models import Show, ShowSeatHistory
+
+now = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
+now_ts = int(now.timestamp())
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return now.astimezone(tz)
+repository.datetime = analytics.datetime = Clock
+
+cases = [
+    [(now_ts - 300 - index * 1800, 200 if index == 48 else 100)
+     for index in range(49)],
+    [(now_ts - 1200 - index * 1900, 100 + index) for index in range(48)],
+    [(now_ts - index * 60, 100 + index // 30 + max(index - 500, 0) // 5)
+     for index in range(1442)],
+    [(now_ts - 300, 100), (now_ts - 3900, 105)],
+]
+
+async def check(points, index):
+    engine = create_engine('sqlite:///:memory:')
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(Show(id='test', show_id=1, show_name='Test', month=10,
+                         year=2026, date=(now + timedelta(days=3)).isoformat(),
+                         seats=100, updated_at=points[0][0]))
+        session.commit()
+        session.execute(ShowSeatHistory.__table__.insert(), [
+            {'show_id': 'test', 'timestamp': stamp, 'seats': seats}
+            for stamp, seats in points
+        ])
+        session.commit()
+        class Adapter:
+            async def execute(self, query):
+                return session.execute(query)
+        repo = repository.AnalyticsRepository(Adapter())
+        trends = await repo.report('trends', 10, 2026)
+        speed = await repo.report('speed', 10, 2026)
+        rate = trends.insights['test'].net_rate_per_day
+        assert rate is not None and rate > 0, (index, trends.insights)
+        assert len(speed.results) == 1, (index, speed.results)
+        assert isclose(speed.results[0][1] * 86400, rate), (index, rate, speed.results)
+        if index == 0:
+            assert rate == 100
+    engine.dispose()
+
+async def run():
+    for index, points in enumerate(cases):
+        await check(points, index)
+asyncio.run(run())
+
+shows = [Show(id=key, show_id=1, show_name='Combined') for key in ('down', 'up')]
+history = [ShowSeatHistory(show_id=key, timestamp=stamp, seats=seats)
+           for key, points in [('down', [(0, 100), (1800, 95), (3600, 90)]),
+                               ('up', [(0, 20), (3600, 25)])]
+           for stamp, seats in points]
+result = analytics.top_shows_by_current_sales_speed(
+    shows, history, net_rates_per_day={'down': 100, 'up': -40})
+assert isclose(result[0][1] * 86400, (100 * 2 - 40) / 3)
+""",
+        tmp_path,
+    )
+
+
 def test_sql_reports_preserve_refunds_and_historical_performances(
     tmp_path: Path,
 ) -> None:
@@ -131,7 +207,7 @@ Base.metadata.create_all(engine)
 session = Session(engine, expire_on_commit=False)
 session.add_all([
     Show(id='current', show_id=1, show_name='Current', month=now.month,
-         year=now.year, date=future.isoformat()),
+         year=now.year, date=future.isoformat(), seats=10, updated_at=now_ts),
     Show(id='stale', show_id=2, show_name='Stale', month=now.month,
          year=now.year, date=future.isoformat()),
     Show(id='past', show_id=3, show_name='Past', month=past.month,
@@ -364,32 +440,41 @@ asyncio.run(run())
     )
 
 
-def test_prediction_keeps_the_seven_day_trend_window(tmp_path: Path) -> None:
+def test_prediction_uses_continuous_history_and_guarded_insights(
+    tmp_path: Path,
+) -> None:
     run_runtime_script(
         r"""
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from services.profticket import analytics
+from services.profticket import analytics_repository as repository_module
 from services.profticket.analytics_repository import AnalyticsRepository
 from telegram.db import Base
 from telegram.db.models import Show, ShowSeatHistory
 
-now = datetime.now(pytz.timezone('Europe/Moscow'))
+now = datetime(2026, 10, 2, 12, tzinfo=timezone.utc)
 now_ts = int(now.timestamp())
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return now.astimezone(tz)
+analytics.datetime = repository_module.datetime = Clock
 engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 session = Session(engine, expire_on_commit=False)
-show = Show(id='daily', show_id=1, show_name='Daily snapshots',
+show = Show(id='daily', show_id=1, show_name='Regular snapshots',
             month=now.month, year=now.year,
-            date=(now + timedelta(days=20)).isoformat())
+            date=(now + timedelta(days=20)).isoformat(),
+            seats=100, updated_at=now_ts)
 session.add(show)
 session.commit()
 session.execute(ShowSeatHistory.__table__.insert(), [
-    {'show_id': 'daily', 'timestamp': now_ts - day * 86400,
-     'seats': (day + 1) * 10} for day in range(4)
+    {'show_id': 'daily', 'timestamp': now_ts - index * 1800,
+     'seats': 100 + index} for index in range(193)
 ])
 session.commit()
 history = session.scalars(select(ShowSeatHistory)).all()
@@ -407,6 +492,16 @@ async def run():
         'prediction', now.month, now.year
     )
     assert result.results == expected
+    assert result.insights['daily'].quality == 'good'
+    assert result.insights['daily'].net_rate_per_day == 48
+    assert result.insights['daily'].forecast_at == now_ts + 180000
+    show.seats = None
+    session.commit()
+    result = await AnalyticsRepository(AsyncAdapter()).report(
+        'prediction', now.month, now.year
+    )
+    assert not result.results
+    assert result.insights['daily'].reason == 'unknown_inventory'
 
 asyncio.run(run())
 session.close()

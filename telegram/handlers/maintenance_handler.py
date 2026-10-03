@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import MagicData
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from telegram.keyboards.main_keyboard import main_keyboard
@@ -11,6 +11,11 @@ maintenance_router.message.filter(MagicData(F.maintenance_mode.is_(True)))
 maintenance_router.callback_query.filter(
     MagicData(F.maintenance_mode.is_(True))
 )
+
+
+@maintenance_router.callback_query()
+async def any_callback(callback: CallbackQuery) -> None:
+    await callback.answer(LEXICON_RU['MAINTENANCE'], show_alert=True)
 
 
 @maintenance_router.message()

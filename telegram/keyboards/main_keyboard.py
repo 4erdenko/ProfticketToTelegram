@@ -41,6 +41,9 @@ async def main_keyboard(
             [KeyboardButton(text=LEXICON_BUTTONS_RU['/analytics_menu'])],
         ]
 
+    if message.chat.type == 'private':
+        kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/subscriptions'])])
+
     # Add Admin button for admin user
     if has_admin_access(user_id, user):
         kb.append([KeyboardButton(text=LEXICON_BUTTONS_RU['/admin_menu'])])

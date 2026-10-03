@@ -19,6 +19,7 @@ from telegram.filters.month_filter import MonthFilter
 from telegram.keyboards.main_keyboard import main_keyboard
 from telegram.keyboards.personal_keyboard import personal_keyboard
 from telegram.lexicon.lexicon_ru import (
+    LEGACY_ANALYTICS_BUTTONS,
     LEXICON_BUTTONS_RU,
     LEXICON_LOGS,
     LEXICON_MONTHS_RU,
@@ -61,6 +62,7 @@ async def cmd_choose_fighter(message: Message, state: FSMContext) -> None:
     ~F.text.startswith('👤 '),
     ~F.text.in_(
         {
+            *LEGACY_ANALYTICS_BUTTONS,
             *LEXICON_BUTTONS_RU.values(),
             *LEXICON_MONTHS_RU.values(),
             '↩️',

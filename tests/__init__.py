@@ -8,6 +8,7 @@ config = types.ModuleType('config')
 
 
 class Settings:
+    TTL_IN_SEC = 20
     COM_ID = '1'
     MAX_MSG_LEN = 100
     ADMIN_ID = 1
@@ -119,7 +120,13 @@ class Message:
         self.text = text
 
 
+class LinkPreviewOptions:
+    def __init__(self, *, is_disabled: bool = False) -> None:
+        self.is_disabled = is_disabled
+
+
 aiogram_types.Message = Message
+aiogram_types.LinkPreviewOptions = LinkPreviewOptions
 modules['aiogram'] = aiogram
 modules['aiogram.types'] = aiogram_types
 

@@ -17,6 +17,7 @@ from telegram.db.models import Show, ShowSeatHistory
 
 logger = logging.getLogger(__name__)
 timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
+SNAPSHOT_BATCH_SIZE = 500
 
 
 class ShowUpdateService:
@@ -81,6 +82,7 @@ class ShowUpdateService:
             }
 
             # Prepare the complete monthly snapshot.
+            snapshot = []
             for event_id, show_data in shows.items():
                 show_values = {
                     'id': event_id,
@@ -120,21 +122,30 @@ class ShowUpdateService:
                     'updated_at': current_time,
                     'is_deleted': False,
                 }
+                snapshot.append(show_values)
 
-                # Restore returning events with the same stable identity.
-                stmt = insert(Show).values(show_values)
+            # Bound statement parameters and preserve the monthly transaction.
+            for offset in range(0, len(snapshot), SNAPSHOT_BATCH_SIZE):
+                batch = snapshot[offset : offset + SNAPSHOT_BATCH_SIZE]
+                stmt = insert(Show).values(batch)
                 stmt = stmt.on_conflict_do_update(
-                    index_elements=['id'], set_=show_values
+                    index_elements=['id'],
+                    set_={key: stmt.excluded[key] for key in batch[0]},
                 )
                 await session.execute(stmt)
 
-                if show_values['seats'] is not None:
+                history = [
+                    {
+                        'show_id': row['id'],
+                        'timestamp': current_time,
+                        'seats': row['seats'],
+                    }
+                    for row in batch
+                    if row['seats'] is not None
+                ]
+                if history:
                     await session.execute(
-                        insert(ShowSeatHistory).values(
-                            show_id=event_id,
-                            timestamp=current_time,
-                            seats=show_values['seats'],
-                        )
+                        insert(ShowSeatHistory).values(history)
                     )
 
             # Reconcile removed events only after a complete collection.

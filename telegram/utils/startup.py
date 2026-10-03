@@ -13,6 +13,7 @@ from telegram.handlers import (
     analytics_handlers,
     maintenance_handler,
     personal_handlers,
+    subscription_handlers,
     throttling_handler,
     user_handlers,
 )
@@ -49,6 +50,7 @@ async def setup_dispatcher() -> Dispatcher:
     )
     dp.include_router(maintenance_handler.maintenance_router)
     dp.include_router(throttling_handler.throttling_router)
+    dp.include_router(subscription_handlers.subscription_router)
     dp.include_router(user_handlers.user_router)
     dp.include_router(personal_handlers.personal_user_router)
     dp.include_router(analytics_handlers.analytics_router)
@@ -79,7 +81,10 @@ async def on_startup(bot: Bot, admin_id: int) -> None:
 
 
 async def on_shutdown(
-    bot: Bot, admin_id: int, update_task: asyncio.Task | None = None
+    bot: Bot,
+    admin_id: int,
+    update_task: asyncio.Task | None = None,
+    subscription_task: asyncio.Task | None = None,
 ) -> None:
     """
     Performs bot shutdown actions.
@@ -88,24 +93,30 @@ async def on_shutdown(
         bot: Bot instance
         admin_id: Admin user ID for notifications
         update_task: Optional background task to cancel
+        subscription_task: Optional notification task to cancel
     """
+    tasks = [
+        task for task in (update_task, subscription_task) if task is not None
+    ]
+    for task in tasks:
+        if not task.done():
+            task.cancel()
     try:
-        await bot.send_message(admin_id, LEXICON_LOGS['BOT_STOPPED'])
-    except Exception as e:
-        logger.error(LEXICON_LOGS['ERROR_ON_SHUTDOWN'].format(str(e)))
-    finally:
+        for task in tasks:
+            try:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            except Exception as e:
+                logger.error('Background task failed: %s', e)
         try:
-            if update_task is not None:
-                if not update_task.done():
-                    update_task.cancel()
-                try:
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await update_task
-                except Exception as e:
-                    logger.error('Background update task failed: %s', e)
-        finally:
-            await bot.session.close()
-            logger.info(LEXICON_LOGS['BOT_SHUTDOWN_COMPLETE'])
+            await bot.send_message(
+                admin_id, LEXICON_LOGS['BOT_STOPPED'], request_timeout=10
+            )
+        except Exception as e:
+            logger.error(LEXICON_LOGS['ERROR_ON_SHUTDOWN'].format(str(e)))
+    finally:
+        await bot.session.close()
+        logger.info(LEXICON_LOGS['BOT_SHUTDOWN_COMPLETE'])
 
 
 def get_token() -> str:

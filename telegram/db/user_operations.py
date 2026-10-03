@@ -259,12 +259,9 @@ async def get_shows_from_db(
         return 'Нет спектаклей в этом месяце'
 
     update_time = datetime.fromtimestamp(last_update, tz=timezone)
-    formatted_time = update_time.strftime('%d.%m.%Y %H:%M')
+    formatted_time = update_time.strftime('%d.%m в %H:%M')
 
-    total = (
-        f'Всего {show_count} спектаклей🌚\n'
-        f'Данные актуальны на: {formatted_time}'
-    )
+    total = f'Всего: {show_count}\nПроверено {formatted_time}'
     return f'{msg}{total}'
 
 

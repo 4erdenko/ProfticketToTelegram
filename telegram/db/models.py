@@ -2,15 +2,19 @@ from datetime import datetime
 
 import pytz
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
     ForeignKey,
     Index,
     Integer,
     String,
+    UniqueConstraint,
     false,
     func,
+    true,
 )
 
 from config import settings
@@ -98,3 +102,54 @@ class ShowSeatHistory(Base):
     show_id = Column(String, ForeignKey('shows.id'), index=True)
     timestamp = Column(Integer, default=current_timestamp, index=True)
     seats = Column(Integer)
+
+
+class Subscription(Base):
+    __tablename__ = 'subscriptions'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'kind', 'key'),
+        CheckConstraint("kind IN ('show', 'actor')"),
+        CheckConstraint(
+            'interval_seconds IN (1800, 3600, 21600, 43200, 86400, 604800)'
+        ),
+        Index('ix_subscriptions_due', 'enabled', 'next_due_at', 'retry_at'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        BigInteger,
+        ForeignKey('users.user_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    kind = Column(String, nullable=False)
+    key = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    interval_seconds = Column(Integer, nullable=False)
+    enabled = Column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    created_at = Column(Integer, nullable=False, default=current_timestamp)
+    next_due_at = Column(Integer, nullable=False)
+    last_sent_at = Column(Integer)
+    baseline = Column(JSON, nullable=False, default=dict)
+    retry_at = Column(Integer)
+    failure_count = Column(
+        Integer, nullable=False, default=0, server_default='0'
+    )
+    needs_baseline = Column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
+
+class SubscriptionDigest(Base):
+    __tablename__ = 'subscription_digests'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        BigInteger,
+        ForeignKey('users.user_id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    pages = Column(JSON, nullable=False)

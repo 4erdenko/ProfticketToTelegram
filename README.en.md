@@ -95,9 +95,10 @@ Seat history is preserved. Back up a production database before upgrading;
 index creation may temporarily block writes.
 
 Past months are archived automatically and remain available in historical
-reports. Sales and returns are aggregated in PostgreSQL. Speed uses the last
-24 hours; prediction uses seven days. For a selected historical month, speed
-uses the last 24 hours of observations for each event.
+reports. Observed inventory decreases and increases are aggregated in
+PostgreSQL. Pace uses the last 24 hours; prediction uses seven days. For a
+selected historical month, speed uses the last 24 hours of observations for
+each event.
 
 4) Run the bot:
 ```sh
@@ -148,8 +149,39 @@ uv run --locked ruff check --fix .
 ## Commands and menus
 
 - Native menu is configured in `telegram/keyboards/native_menu.py`: `/start`,
-  `/help`, `/set_actor`, `/analytics`.
+  `/help`, `/set_actor`, `/analytics`, `/subscriptions`.
 - Button texts: `telegram/lexicon/lexicon_ru.py`.
+
+## Subscriptions and trends
+
+In a private chat, open **🔔 Подписки** or `/subscriptions`. Search for a show
+or artist by part of its name, choose a result and a delivery interval:
+30 minutes, 1 hour, 6 hours, 12 hours, daily or weekly. A show subscription
+covers its upcoming performances, including new dates. An artist subscription
+covers shows whose published cast includes that artist; alternate performers
+in the published cast do not confirm their participation on a particular date.
+
+Subscription cards provide frequency changes, pause, resume and deletion.
+Only changes trigger a notification. Creation and resumption establish a
+baseline from the current state. Delivery frequency is independent of source
+polling, which uses `UPDATE_INTERVAL`. Settings and baselines persist in the
+database. Large digests provide an “Остальные изменения →” button. Saved pages
+preserve every change at delivery time and remain available only to the
+recipient, including after restarts and subsequent notifications.
+Apply migrations through `d734c2a8f190` before starting the updated bot:
+`uv run --locked alembic upgrade head`.
+
+**📈 Тенденции** shows available inventory, observed decreases and increases
+over 24 hours, pace and a comparison with the preceding day. Inventory
+snapshots do not expose orders: decreases can include quota removal, while
+increases can include additional inventory. These are not confirmed sales
+or refunds.
+
+The conditional depletion forecast requires at least a day of fresh history,
+checks gaps, quota jumps and pace stability, and stops at the performance date
+or a 14-day horizon. It uses changes over actual elapsed time instead of
+quadratic extrapolation. The range describes pace scenarios, not a probability
+or statistical confidence interval. Reports explain unavailable forecasts.
 
 ## Logging
 

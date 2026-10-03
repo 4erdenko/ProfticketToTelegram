@@ -6,7 +6,7 @@ from html import escape
 from html.parser import HTMLParser
 
 import pytz
-from aiogram.types import Message
+from aiogram.types import LinkPreviewOptions, Message
 from dateutil.relativedelta import relativedelta
 
 from config import settings
@@ -131,12 +131,9 @@ def get_result_message(
             else PERFORMANCE_FALLBACKS['inventory']
         )
     elif seats == 0:
-        seats_text = '<code>SOLD OUT</code>'
+        seats_text = 'Билетов пока нет'
     else:
-        seats_value = (
-            f'<a href="{buy_link}">{seats}</a>' if buy_link else str(seats)
-        )
-        seats_text = f'Билетов: {seats_value}'
+        seats_text = f'Билетов: <b>{seats}</b>'
 
     seats_diff = ''
     if (
@@ -145,14 +142,14 @@ def get_result_message(
         and seats != previous_seats
     ):
         diff = seats - previous_seats
-        seats_diff = f' ({diff} 🔻)' if diff < 0 else f' (+{diff} 🔺)'
+        direction = 'меньше' if diff < 0 else 'больше'
+        seats_diff = f' (на {abs(diff)} {direction})'
 
-    return (
-        f'📅<strong> {date}</strong>\n'
-        f'💎 {show_name}\n'
-        f'🎫 {seats_text}{seats_diff}\n'
-        '------------------------\n'
-    )
+    tickets = f'🎟 {seats_text}{seats_diff}'
+    if seats is not None and seats > 0 and buy_link:
+        tickets += f' · <a href="{buy_link}">Купить</a>'
+
+    return f'🎭 <b>{show_name}</b>\n📅 {date}\n{tickets}\n\n'
 
 
 def _text_length(text: str) -> int:
@@ -211,7 +208,7 @@ class _HTMLMessageParser(HTMLParser):
 
 def split_message_by_separator(
     message: str,
-    separator: str = '\n------------------------\n',
+    separator: str = '\n\n',
     max_length: int = settings.MAX_MSG_LEN,
 ) -> list[str]:
     """
@@ -269,6 +266,9 @@ async def send_chunks_edit(
         text: The message text to be sent
         **kwargs: Additional arguments to pass to the message sending functions
     """
+    kwargs.setdefault(
+        'link_preview_options', LinkPreviewOptions(is_disabled=True)
+    )
     chunks = split_message_by_separator(text)
 
     if chunks:
@@ -321,6 +321,9 @@ async def send_chunks_answer(message: Message, text: str, **kwargs) -> None:
         text: The message text to be sent
         **kwargs: Additional arguments to pass to message.answer
     """
+    kwargs.setdefault(
+        'link_preview_options', LinkPreviewOptions(is_disabled=True)
+    )
     chunks = split_message_by_separator(
         text, separator='\n\n', max_length=settings.MAX_MSG_LEN
     )

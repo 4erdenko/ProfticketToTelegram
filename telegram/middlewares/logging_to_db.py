@@ -20,6 +20,11 @@ class UserLoggingMiddleware(BaseMiddleware):
     ) -> None:
         session = data['session']
         event_user = data.get('event_from_user')
+        event_message = update.message
+        if update.callback_query is not None:
+            event_message = update.callback_query.message
+            if event_user is None:
+                event_user = update.callback_query.from_user
         if event_user is None and update.message:
             event_user = update.message.from_user
         if event_user is not None:
@@ -35,6 +40,15 @@ class UserLoggingMiddleware(BaseMiddleware):
                         index_elements=[User.user_id]
                     )
                 )
+                await session.commit()
+            elif (
+                user.bot_blocked
+                and isinstance(event_message, types.Message)
+                and event_message.chat.type == 'private'
+                and event_message.chat.id == event_user.id
+            ):
+                user.bot_blocked = False
+                user.bot_blocked_date = None
                 await session.commit()
 
     async def __call__(

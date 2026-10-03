@@ -45,14 +45,14 @@ import json
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-import numpy as np
 import pytz
 
 from config import settings
+from services.profticket.insights import analyze_inventory, time_weighted_rate
 from telegram.db.models import Show, ShowSeatHistory
 
 # Common list of titles and awards to ignore when processing actors
@@ -371,104 +371,18 @@ def top_shows_by_sales(
 def calculate_current_sales_rate(
     history: Sequence[ShowSeatHistory], lookback_hours: int = 24
 ) -> float | None:
-    """
-    Устойчивый расчёт текущей скорости продаж:
-    - Окно lookback_hours (по умолчанию 24 часа)
-    - Игнорируем интервалы короче MIN_DT (15 мин)
-    - Для достаточного числа точек (>= 7) используем линейную регрессию
-    seats(t)
-      с одноразовым клиппингом выбросов по остаткам;
-      иначе — EWMA по интервалам.
-
-    Возвращает билетов/секунду (умножить на 3600 для билетов/час,
-    на 86400 для билетов/день).
-    """
-    if len(history) < 2:
+    """Return time-weighted net inventory depletion in seats per second."""
+    timestamps = [
+        row.timestamp
+        for row in history
+        if row.timestamp is not None
+        and row.seats is not None
+        and row.seats >= 0
+    ]
+    if not timestamps:
         return None
-
-    MIN_DT = 900  # 15 минут — минимальный шаг между соседними точками
-
-    records = sorted(
-        (
-            row
-            for row in history
-            if row.timestamp is not None and row.seats is not None
-        ),
-        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
-    )
-    if len(records) < 2:
-        return None
-    current_ts = records[-1].timestamp
-    lookback_seconds = lookback_hours * 3600
-    cutoff_ts = current_ts - lookback_seconds
-
-    # Фильтруем записи за последние lookback_hours
-    recent_records = [r for r in records if r.timestamp >= cutoff_ts]
-    if len(recent_records) < 2:
-        return None
-
-    # Оставляем только точки с шагом >= MIN_DT
-    filtered: list[ShowSeatHistory] = []
-    for rec in recent_records:
-        if not filtered:
-            filtered.append(rec)
-            continue
-        if rec.timestamp - filtered[-1].timestamp >= MIN_DT:
-            filtered.append(rec)
-
-    if len(filtered) < 2:
-        return None
-
-    # Если точек >= 7 (интервалов >= 6): линейная регрессия ( seats = a*t + b )
-    # Примечание: t в часах для численной стабильности; rate_sec = -a/3600
-    if len(filtered) >= 7:
-        t0 = filtered[0].timestamp
-        t_hours = np.array(
-            [(r.timestamp - t0) / 3600 for r in filtered], dtype=float
-        )
-        y_seats = np.array([r.seats for r in filtered], dtype=float)
-
-        # Первичная оценка
-        a1, b1 = np.polyfit(t_hours, y_seats, 1)
-        resid = y_seats - (a1 * t_hours + b1)
-        med = np.median(resid)
-        mad = np.median(np.abs(resid - med)) if np.any(resid) else 0.0
-
-        # Порог клиппинга: 3*MAD (или 2*STD при MAD==0)
-        if mad > 0:
-            thr = 3.0 * mad
-        else:
-            std = np.std(resid)
-            thr = 2.0 * std
-
-        if thr > 0:
-            mask = np.abs(resid - med) <= thr
-            if mask.sum() >= 2:
-                a2, b2 = np.polyfit(t_hours[mask], y_seats[mask], 1)
-                slope = a2
-            else:
-                slope = a1
-        else:
-            slope = a1
-
-        return float(-slope / 3600.0)
-
-    # Иначе — EWMA по интервалам (как раньше), но с MIN_DT=15 мин
-    rates: list[float] = []
-    weights: list[float] = []
-    for prev, curr in zip(filtered, filtered[1:], strict=False):
-        dt = curr.timestamp - prev.timestamp
-        if dt < MIN_DT:
-            continue
-        rate = (prev.seats - curr.seats) / dt
-        age_hours = (current_ts - curr.timestamp) / 3600
-        weight = np.exp(-age_hours / (lookback_hours / 2))
-        rates.append(rate)
-        weights.append(weight)
-
-    if not rates:
-        return None
-    return float(np.average(rates, weights=weights))
+    rate = time_weighted_rate(history, max(timestamps), lookback_hours * 3600)
+    return rate / 86400 if rate is not None else None
 
 
 def _count_valid_intervals(
@@ -510,6 +424,8 @@ def top_shows_by_current_sales_speed(
     year: int | None = None,
     n: int = 5,
     include_past_shows: bool = True,
+    *,
+    net_rates_per_day: Mapping[str, float | None] | None = None,
 ) -> list[tuple[str, float, str]]:
     """
     Топ шоу по текущей скорости продаж
@@ -537,11 +453,17 @@ def top_shows_by_current_sales_speed(
 
     for show in filtered_shows:
         h_rows = history_buckets.get(show.id, [])
-        if len(h_rows) < 3:  # Нужно минимум 3 записи для адекватной оценки
-            continue
-
-        # Используем последние 24 часа для оценки текущей скорости
-        current_rate = calculate_current_sales_rate(h_rows, lookback_hours=24)
+        if net_rates_per_day is None:
+            if len(h_rows) < 3:
+                continue
+            current_rate = calculate_current_sales_rate(
+                h_rows, lookback_hours=24
+            )
+        else:
+            daily_rate = net_rates_per_day.get(show.id)
+            current_rate = (
+                daily_rate / 86400 if daily_rate is not None else None
+            )
         if current_rate is not None:
             group_key = getattr(show, 'show_id', None) or show.id
             weight = _count_valid_intervals(
@@ -578,121 +500,11 @@ def predict_sold_out_advanced(
     show_dt: datetime | None = None,
     now_ts: int | None = None,
 ) -> int | None:
-    """
-    Улучшенное предсказание sold-out с учётом тренда
-    и адаптивной оценкой скорости
-    """
-    # Требуем минимум 4 точки (>= 3 интервалов)
-    if len(history) < 4:
-        return None
-
-    records = sorted(
-        (
-            row
-            for row in history
-            if row.timestamp is not None and row.seats is not None
-        ),
-        key=lambda row: (row.timestamp, getattr(row, 'id', None) or 0),
-    )
-    if len(records) < 4:
-        return None
-
+    """Return a conditional depletion date supported by observations."""
     if now_ts is None:
-        tz = pytz.timezone(
-            getattr(settings, 'DEFAULT_TIMEZONE', 'Europe/Moscow')
-        )
-        now_ts = int(datetime.now(tz).timestamp())
-
-    # Анализируем последние 7 дней или всю историю, если она короче
-    lookback_seconds = 7 * 24 * 3600
-    cutoff_ts = max(records[0].timestamp, now_ts - lookback_seconds)
-    recent_records = [r for r in records if r.timestamp >= cutoff_ts]
-
-    # Отфильтровываем слишком короткие интервалы (<5 минут) — шум
-    MIN_DT = 300  # 5 минут
-    filtered: list[ShowSeatHistory] = []
-    for rec in recent_records:
-        if not filtered:
-            filtered.append(rec)
-            continue
-        if rec.timestamp - filtered[-1].timestamp >= MIN_DT:
-            filtered.append(rec)
-
-    # Если после фильтрации точек меньше 4, попробуем взять хвост истории
-    # с требованием соблюдения минимального шага
-    if len(filtered) < 4:
-        tail_filtered: list[ShowSeatHistory] = []
-        for rec in records[-10:]:  # ограничим хвост десятью записями
-            if not tail_filtered:
-                tail_filtered.append(rec)
-                continue
-            if rec.timestamp - tail_filtered[-1].timestamp >= MIN_DT:
-                tail_filtered.append(rec)
-        filtered = tail_filtered
-
-    # Требуем минимум 4 точки (>=3 интервала) после фильтрации
-    if len(filtered) < 4:
-        return None
-
-    # Собираем временные ряды
-    timestamps = []
-    seats = []
-
-    for rec in filtered:
-        timestamps.append(rec.timestamp)
-        seats.append(rec.seats)
-
-    # Полиномиальная регрессия для учёта тренда
-    if len(timestamps) >= 4:
-        # Нормализуем время для численной стабильности
-        t_min = min(timestamps)
-        t_normalized = [(t - t_min) / 3600 for t in timestamps]  # в часах
-
-        # Используем полином 2-й степени
-        coeffs = np.polyfit(t_normalized, seats, 2)
-
-        # Предсказываем, когда seats = 0
-        # Решаем квадратное уравнение ax² + bx + c = 0
-        a, b, c = coeffs
-        discriminant = b**2 - 4 * a * c
-
-        if discriminant >= 0 and a != 0:
-            # Берём положительный корень
-            t_sold_out = (-b - np.sqrt(discriminant)) / (2 * a)
-            if t_sold_out > t_normalized[-1]:  # Прогноз в будущее
-                sold_out_ts = t_min + int(t_sold_out * 3600)
-
-                # Проверки на адекватность
-                if show_dt and sold_out_ts > show_dt.timestamp():
-                    return None
-                if sold_out_ts <= now_ts:
-                    return None
-                if sold_out_ts > now_ts + 365 * 24 * 3600:  # Более года
-                    return None
-
-                return sold_out_ts
-
-    # Fallback: линейная экстраполяция по последним точкам
-    if len(filtered) >= 4:
-        last_rec = filtered[-1]
-        # Средняя скорость по чистому изменению за период
-        total_time = filtered[-1].timestamp - filtered[0].timestamp
-        total_sold = filtered[0].seats - filtered[-1].seats
-
-        if total_time > 0 and total_sold > 0:
-            avg_rate = total_sold / total_time
-            seconds_left = last_rec.seats / avg_rate
-
-            if 0 < seconds_left < 365 * 24 * 3600:
-                prediction = last_rec.timestamp + int(seconds_left)
-                if (
-                    show_dt
-                    and prediction <= show_dt.timestamp()
-                    and prediction > now_ts
-                ):
-                    return prediction
-
-    return None
+        timezone = pytz.timezone(settings.DEFAULT_TIMEZONE)
+        now_ts = int(datetime.now(timezone).timestamp())
+    return analyze_inventory(history, now_ts, show_dt).forecast_at
 
 
 def shows_predicted_to_sell_out_soonest(

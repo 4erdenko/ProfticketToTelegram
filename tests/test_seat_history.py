@@ -216,6 +216,82 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual([h.seats for h in histories], [78])
 
+    async def test_batches_preserve_snapshots_and_roll_back_together(
+        self,
+    ) -> None:
+        from services.ermolova import parse_schedule
+        from services.profticket.profticket_snapshoter import settings
+        from tests.test_ermolova import schedule_html
+
+        event = parse_schedule(schedule_html(), 9, 2026)[0]
+        event.update(image=None, annotation=None, actors=[], seats=78)
+        source = DummyProfticket(
+            {f'e{index}': dict(event) for index in range(501)}
+        )
+        source.data['e0']['seats'] = None
+        service = ShowUpdateService(self.Session, source, DummyBot())
+        with patch.object(settings, 'MAX_CONSECUTIVE_ERRORS', 3, create=True):
+            async with FakeAsyncSession(self.Session()) as session:
+                execute = session.execute
+                session.execute = AsyncMock(side_effect=execute)
+                self.assertTrue(
+                    await service._update_month_data(session, 9, 2026)
+                )
+                self.assertEqual(session.execute.await_count, 6)
+                session.execute = execute
+                rows = (await execute(select(Show))).scalars().all()
+                self.assertEqual(len(rows), 501)
+                history = (
+                    (await execute(select(ShowSeatHistory))).scalars().all()
+                )
+                self.assertEqual(len(history), 500)
+                for row in source.data.values():
+                    row['seats'] = 50
+                source.data.pop('e1')
+                source.data['new'] = dict(event, seats=20)
+
+                async def fail_last_history(statement):
+                    if (
+                        statement.is_insert
+                        and statement.table.name == 'show_seat_history'
+                        and 'show_id_m0' in statement.compile().params
+                        and statement.compile().params['show_id_m0'] == 'new'
+                    ):
+                        raise RuntimeError('last batch failed')
+                    return await execute(statement)
+
+                session.execute = fail_last_history
+                self.assertFalse(
+                    await service._update_month_data(session, 9, 2026)
+                )
+                session.execute = execute
+                session._session.expire_all()
+                rows = (await execute(select(Show))).scalars().all()
+                self.assertEqual(len(rows), 501)
+                self.assertEqual(
+                    {row.seats for row in rows if row.id != 'e0'}, {78}
+                )
+                self.assertFalse(any(row.is_deleted for row in rows))
+                self.assertEqual(
+                    len((await execute(select(ShowSeatHistory))).all()), 500
+                )
+                self.assertTrue(
+                    await service._update_month_data(session, 9, 2026)
+                )
+                session._session.expire_all()
+                rows = {
+                    row.id: row
+                    for row in (await execute(select(Show))).scalars()
+                }
+                self.assertTrue(rows['e1'].is_deleted)
+                self.assertEqual(rows['e2'].previous_seats, 78)
+                self.assertEqual(rows['e2'].seats, 50)
+                self.assertIsNone(rows['e0'].previous_seats)
+                self.assertEqual(rows['new'].seats, 20)
+                self.assertEqual(
+                    len((await execute(select(ShowSeatHistory))).all()), 1001
+                )
+
     def test_calculate_average_sales_rate_for_show(self):
         history_s1 = [
             ShowSeatHistory(show_id='s1', timestamp=10, seats=10),
@@ -642,16 +718,23 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         else:
             self.assertIsNone(future_pred)
 
-    def test_shows_predicted_to_sell_out_returns_show_date(self):
-        from datetime import datetime, timedelta
+    def test_shows_predicted_to_sell_out_returns_show_date(self) -> None:
+        from datetime import datetime, timedelta, tzinfo
 
         import pytz
 
         from config import settings
 
         tz = pytz.timezone(settings.DEFAULT_TIMEZONE)
-        now = datetime.now(tz)
-        show_date = (now + timedelta(hours=4)).strftime('%Y-%m-%d %H:%M')
+        now = tz.localize(datetime(2026, 10, 2, 12))
+        now_ts = int(now.timestamp())
+        event_date = now + timedelta(days=2)
+        show_date = event_date.strftime('%Y-%m-%d %H:%M')
+
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz: tzinfo | None = None) -> datetime:
+                return now.astimezone(tz)
 
         shows_data = [
             Show(id='s1', show_name='Alpha', actors='[]', date=show_date)
@@ -660,28 +743,20 @@ class SeatHistoryTestCase(unittest.IsolatedAsyncioTestCase):
         histories = [
             ShowSeatHistory(
                 show_id='s1',
-                timestamp=int((now - timedelta(hours=3)).timestamp()),
-                seats=100,
-            ),
-            ShowSeatHistory(
-                show_id='s1',
-                timestamp=int((now - timedelta(hours=2)).timestamp()),
-                seats=80,
-            ),
-            ShowSeatHistory(
-                show_id='s1',
-                timestamp=int((now - timedelta(hours=1)).timestamp()),
-                seats=60,
-            ),
-            ShowSeatHistory(
-                show_id='s1', timestamp=int(now.timestamp()), seats=40
-            ),
+                timestamp=now_ts - index * 3600,
+                seats=24 + index,
+            )
+            for index in range(25)
         ]
 
-        predictions = analytics.shows_predicted_to_sell_out_soonest(
-            shows_data, histories, n=1
-        )
+        with patch.object(analytics, 'datetime', Clock):
+            predictions = analytics.shows_predicted_to_sell_out_soonest(
+                shows_data, histories, n=1
+            )
         self.assertEqual(len(predictions), 1)
         name, pred_ts, _id, returned_date = predictions[0]
+        self.assertEqual(name, 'Alpha')
+        self.assertEqual(_id, 's1')
         self.assertEqual(returned_date, show_date)
-        self.assertGreater(pred_ts, int(now.timestamp()))
+        self.assertEqual(pred_ts, now_ts + 24 * 3600)
+        self.assertLessEqual(pred_ts, int(event_date.timestamp()))

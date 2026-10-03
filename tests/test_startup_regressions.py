@@ -3,6 +3,36 @@ from pathlib import Path
 from tests.runtime_helpers import run_runtime_script
 
 
+def test_entrypoint_reports_failure_but_keyboard_interrupt_is_clean(
+    tmp_path: Path,
+) -> None:
+    run_runtime_script(
+        r"""
+import subprocess
+import sys
+
+for exception, expected in [('RuntimeError', 1), ('KeyboardInterrupt', 0)]:
+    script = f'''
+import runpy
+from unittest.mock import patch
+
+def fail(coroutine):
+    coroutine.close()
+    raise {exception}('simulated startup failure')
+
+with patch('asyncio.run', fail):
+    runpy.run_module('main', run_name='__main__')
+'''
+    result = subprocess.run([sys.executable, '-W', 'error', '-c', script],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == expected, result.stderr
+    if expected:
+        assert 'RuntimeError: simulated startup failure' in result.stderr
+""",
+        tmp_path,
+    )
+
+
 def test_optional_notifications_do_not_interrupt_lifecycle(
     tmp_path: Path,
 ) -> None:
@@ -72,6 +102,47 @@ for value in ('false', '0', 'off'):
     )
 
 
+def test_shutdown_stops_both_workers_before_notification(
+    tmp_path: Path,
+) -> None:
+    run_runtime_script(
+        """
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+from telegram.utils.startup import on_shutdown
+
+async def check():
+    stopped = set()
+
+    async def worker(name):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.add(name)
+
+    tasks = [asyncio.create_task(worker(name)) for name in ('source', 'notifications')]
+    await asyncio.sleep(0)
+
+    async def send(*args, **kwargs):
+        assert stopped == {'source', 'notifications'}
+        assert kwargs['request_timeout'] == 10
+
+    bot = SimpleNamespace(
+        send_message=AsyncMock(side_effect=send),
+        session=SimpleNamespace(close=AsyncMock()),
+    )
+    await on_shutdown(bot, 1, *tasks)
+    assert all(task.cancelled() for task in tasks)
+    bot.session.close.assert_awaited_once()
+
+asyncio.run(check())
+""",
+        tmp_path,
+    )
+
+
 def test_main_closes_http_clients_and_database_on_polling_failure(
     tmp_path: Path,
 ) -> None:
@@ -94,13 +165,20 @@ async def check():
         start_polling=AsyncMock(side_effect=RuntimeError('polling failed')),
     )
     update_task = None
+    subscription_task = None
 
     async def update_loop():
         nonlocal update_task
         update_task = asyncio.current_task()
         await asyncio.Event().wait()
 
-    async def start_polling(bot):
+    async def subscription_loop():
+        nonlocal subscription_task
+        subscription_task = asyncio.current_task()
+        await asyncio.Event().wait()
+
+    async def start_polling(bot, **kwargs):
+        assert kwargs == {'close_bot_session': False}
         await asyncio.sleep(0)
         raise RuntimeError('polling failed')
 
@@ -113,6 +191,7 @@ async def check():
         patch.object(main, 'setup_database', AsyncMock(return_value=(None, {'engine': engine}))),
         patch.object(main, 'ProfticketsInfo', return_value=source),
         patch.object(main, 'ShowUpdateService', return_value=SimpleNamespace(update_loop=update_loop)),
+        patch.object(main, 'SubscriptionService', return_value=SimpleNamespace(run=subscription_loop)),
         patch.object(main, 'on_startup', AsyncMock()),
     ):
         try:
@@ -122,6 +201,7 @@ async def check():
         else:
             raise AssertionError('Polling errors must propagate')
     assert update_task is not None and update_task.cancelled()
+    assert subscription_task is not None and subscription_task.cancelled()
     bot.session.close.assert_awaited_once()
     source.client.aclose.assert_awaited_once()
     engine.dispose.assert_awaited_once()

@@ -17,6 +17,7 @@ def analytics_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     builder = ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text=LEXICON_BUTTONS_RU['/report_trends'])],
             # Объединяем кнопки продаж и скорости в один ряд
             [
                 KeyboardButton(

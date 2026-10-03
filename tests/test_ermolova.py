@@ -128,7 +128,7 @@ def test_unknown_inventory_renders_link_without_false_soldout() -> None:
     assert 'A &amp; B' in message and '&lt;date&gt;' in message
     assert '<a href="https://e.test">' in message
     assert '🔻' not in message
-    assert 'SOLD OUT' in get_result_message(
+    assert 'Билетов пока нет' in get_result_message(
         0, None, 'A', 'd', 'https://e.test'
     )
 
@@ -148,7 +148,7 @@ def test_message_handles_missing_fields(
         assert PERFORMANCE_FALLBACKS['inventory'] in message
         assert 'SOLD OUT' not in message
     elif seats == 0:
-        assert 'SOLD OUT' in message
+        assert 'Билетов пока нет' in message
     else:
         assert str(seats) in message
 
@@ -166,8 +166,8 @@ def test_message_handles_each_nullable_field(field: str) -> None:
     if field == 'buy_link':
         assert '<a ' not in message
     else:
-        assert '<a href="https://e.test">5</a>' in message
-    assert '(-2' in message
+        assert '<a href="https://e.test">Купить</a>' in message
+    assert '(на 2 меньше)' in message
 
 
 @pytest.mark.parametrize(

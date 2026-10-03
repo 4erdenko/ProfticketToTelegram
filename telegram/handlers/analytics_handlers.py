@@ -12,6 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from services.profticket.analytics_repository import AnalyticsRepository
+from telegram.analytics_messages import (
+    INVENTORY_EXPLANATION,
+    format_inventory_insights,
+    inventory_number,
+    net_inventory_change,
+    performance_date,
+)
 from telegram.keyboards.analytics_keyboard import (
     RUS_TO_MONTH,
     analytics_main_menu_keyboard,
@@ -19,7 +26,11 @@ from telegram.keyboards.analytics_keyboard import (
     analytics_months_with_alltime_keyboard,
 )
 from telegram.keyboards.main_keyboard import main_keyboard
-from telegram.lexicon.lexicon_ru import LEXICON_BUTTONS_RU, LEXICON_RU
+from telegram.lexicon.lexicon_ru import (
+    LEGACY_ANALYTICS_BUTTONS,
+    LEXICON_BUTTONS_RU,
+    LEXICON_RU,
+)
 from telegram.tg_utils import MONTHS_GENITIVE_RU, send_chunks_answer
 
 logger = logging.getLogger(__name__)
@@ -41,6 +52,10 @@ class AnalyticsStates(StatesGroup):
 
 # REPORTS объединённый
 REPORTS = {
+    LEXICON_BUTTONS_RU['/report_trends']: {
+        'kind': 'trends',
+        'title': LEXICON_RU['TRENDS_REPORT_TITLE'],
+    },
     LEXICON_BUTTONS_RU['/report_top_shows_sales']: {
         'kind': 'sales',
         'title': LEXICON_RU['TOP_SHOWS_SALES_REPORT_TITLE'],
@@ -125,15 +140,14 @@ async def cmd_back_to_main_menu(
 # --- Report Type Selection (initiates period choice) ---
 @analytics_router.message(
     F.text.in_(
-        [
-            LEXICON_BUTTONS_RU['/report_top_shows_sales'],
-            LEXICON_BUTTONS_RU['/report_calendar_pace'],
-            LEXICON_BUTTONS_RU['/report_top_shows_speed'],
-            LEXICON_BUTTONS_RU['/report_top_artists_sales'],
-            # Добавляем новые отчёты в обработчик
-            LEXICON_BUTTONS_RU['/report_top_shows_returns'],
-            LEXICON_BUTTONS_RU['/report_top_shows_return_rate'],
-        ]
+        {
+            *REPORTS,
+            *LEGACY_ANALYTICS_BUTTONS,
+        }
+        - {
+            LEXICON_BUTTONS_RU['/report_predict_sell_out'],
+            '⏳ Прогноз Sold Out',
+        }
     )
 )
 async def cmd_select_report_type(
@@ -144,7 +158,10 @@ async def cmd_select_report_type(
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
     await state.set_state(AnalyticsStates.choosing_month_for_top)
-    await state.update_data(report_type_to_generate=message.text)
+    report_key = message.text
+    if report_key in LEGACY_ANALYTICS_BUTTONS:
+        report_key = LEXICON_BUTTONS_RU[LEGACY_ANALYTICS_BUTTONS[report_key]]
+    await state.update_data(report_type_to_generate=report_key)
     await message.answer(
         LEXICON_RU['CHOOSE_REPORT_PERIOD'],
         reply_markup=analytics_months_with_alltime_keyboard(months),
@@ -152,7 +169,9 @@ async def cmd_select_report_type(
 
 
 @analytics_router.message(
-    F.text == LEXICON_BUTTONS_RU['/report_predict_sell_out']
+    F.text.in_(
+        {LEXICON_BUTTONS_RU['/report_predict_sell_out'], '⏳ Прогноз Sold Out'}
+    )
 )
 async def cmd_select_soldout_report(
     message: Message, state: FSMContext, session: AsyncSession
@@ -162,7 +181,9 @@ async def cmd_select_soldout_report(
         await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'])
         return
     await state.set_state(AnalyticsStates.choosing_month)
-    await state.update_data(report_type_to_generate=message.text)
+    await state.update_data(
+        report_type_to_generate=LEXICON_BUTTONS_RU['/report_predict_sell_out']
+    )
     await message.answer(
         LEXICON_RU['CHOOSE_REPORT_PERIOD'],
         reply_markup=analytics_months_keyboard(months),
@@ -241,6 +262,24 @@ async def cmd_generate_top_report_month(
 
     response_lines = [f'<b>{report_title}{period_text}:</b>']
 
+    if report_type_key == LEXICON_BUTTONS_RU['/report_trends']:
+        for index, show in enumerate(results, 1):
+            insights = report_data.insights[show.id]
+            seats = (
+                inventory_number(show.seats)
+                if show.seats is not None
+                else 'пока неизвестно'
+            )
+            response_lines.append(
+                f'{index}. <b>{escape(show.show_name or "Без названия")}</b>\n'
+                f'📅 {escape(performance_date(show.date))}\n'
+                f'🎟 Билетов на сайте: <b>{seats}</b>\n'
+                f'{format_inventory_insights(insights)}'
+            )
+        response_lines.append(f'<i>{INVENTORY_EXPLANATION}</i>')
+        await send_chunks_answer(message, '\n\n'.join(response_lines))
+        return
+
     # Добавляем пояснение формата для отчета продаж
     if report_type_key == LEXICON_BUTTONS_RU['/report_top_shows_sales']:
         response_lines.append(
@@ -271,8 +310,8 @@ async def cmd_generate_top_report_month(
                 LEXICON_RU['TOP_SHOWS_SALES_LINE'].format(
                     index=i,
                     name=escape(str(name)),
-                    gross=gross,
-                    net=net,
+                    gross=inventory_number(gross),
+                    net_change=net_inventory_change(net),
                     tracking=track,
                 )
             )
@@ -286,7 +325,9 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_ARTISTS_SALES_LINE'].format(
-                    index=i, name=escape(str(artist)), sold=sold
+                    index=i,
+                    name=escape(str(artist)),
+                    sold=inventory_number(sold),
                 )
                 + track
             )
@@ -309,8 +350,7 @@ async def cmd_generate_top_report_month(
                     index=i,
                     name=escape(str(name)),
                     status=status,
-                    speed=rate_day,
-                    unit=LEXICON_RU['SALES_SPEED_UNIT_PER_DAY'],
+                    speed=inventory_number(round(rate_day, 1)),
                 )
             )
     # Добавляем форматирование для новых отчётов
@@ -324,7 +364,9 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_RETURNS_LINE'].format(
-                    index=i, name=escape(str(name)), returns=returns
+                    index=i,
+                    name=escape(str(name)),
+                    returns=inventory_number(returns),
                 )
                 + track
             )
@@ -342,7 +384,9 @@ async def cmd_generate_top_report_month(
                     track = LEXICON_RU['TRACKING_SINCE'].format(date=date_str)
             response_lines.append(
                 LEXICON_RU['TOP_SHOWS_RETURN_RATE_LINE'].format(
-                    index=i, name=escape(str(name)), percent=percent
+                    index=i,
+                    name=escape(str(name)),
+                    percent=inventory_number(round(percent, 1)),
                 )
                 + track
             )
@@ -371,10 +415,10 @@ async def cmd_generate_top_report_month(
 
             response_lines.append(
                 LEXICON_RU['CALENDAR_PACE_DATE_LINE'].format(
-                    date=escape(str(date)),
-                    gross=gross,
-                    net=net,
-                    refunds=refund,
+                    date=escape(performance_date(date)),
+                    gross=inventory_number(gross),
+                    net_change=net_inventory_change(net),
+                    refunds=inventory_number(refund),
                     shows=shows_text,
                 )
             )
@@ -394,14 +438,15 @@ async def cmd_generate_top_report_month(
 
             response_lines.append(
                 LEXICON_RU['CALENDAR_PACE_SUMMARY'].format(
-                    total_gross=total_gross,
-                    total_net=total_net,
-                    total_refunds=total_refunds,
-                    avg_gross=avg_gross,
+                    total_gross=inventory_number(total_gross),
+                    net_change=net_inventory_change(total_net),
+                    total_refunds=inventory_number(total_refunds),
+                    avg_gross=inventory_number(round(avg_gross, 1)),
                 )
             )
 
     if len(response_lines) > 1:
+        response_lines.append(f'<i>{INVENTORY_EXPLANATION}</i>')
         full_text = '\n\n'.join(response_lines)
         await send_chunks_answer(message, full_text)
     else:
@@ -459,20 +504,34 @@ async def cmd_generate_soldout_report(
     results = report_data.results
 
     if not results:
-        await message.answer(LEXICON_RU['NO_DATA_FOR_REPORT'] + period_text)
+        await message.answer(LEXICON_RU['NO_RELIABLE_FORECAST'] + period_text)
         return
 
-    response_lines = [f'{report_title}{period_text}:']
+    response_lines = [f'<b>{report_title}{period_text}:</b>']
     for i, (name, ts, _id, show_date) in enumerate(results, 1):
-        date_str = format_timestamp_to_date(ts, include_year=True)
-        response_lines.append(
-            LEXICON_RU['PREDICT_SELL_OUT_LINE'].format(
-                index=i,
-                name=escape(str(name)),
-                show_date=escape(str(show_date)),
-                date=date_str,
+        if _id in report_data.insights:
+            insights = report_data.insights[_id]
+            seats = (
+                inventory_number(insights.latest_seats)
+                if insights.latest_seats is not None
+                else 'пока неизвестно'
             )
-        )
+            response_lines.append(
+                f'{i}. <b>{escape(str(name))}</b>\n'
+                f'📅 {escape(performance_date(show_date))}\n'
+                f'🎟 Билетов на сайте: <b>{seats}</b>\n'
+                f'{format_inventory_insights(insights)}'
+            )
+        else:
+            response_lines.append(
+                LEXICON_RU['PREDICT_SELL_OUT_LINE'].format(
+                    index=i,
+                    name=escape(str(name)),
+                    show_date=escape(performance_date(show_date)),
+                    date=format_timestamp_to_date(ts, include_year=True),
+                )
+            )
+    response_lines.append(f'<i>{INVENTORY_EXPLANATION}</i>')
     await send_chunks_answer(message, '\n\n'.join(response_lines))
 
 

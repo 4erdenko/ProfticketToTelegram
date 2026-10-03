@@ -97,3 +97,75 @@ assert 'ix_show_seat_history_show_time' in sql
         tmp_path,
         {'DB_URL': 'postgresql+asyncpg://test:p%40ss@127.0.0.1/test'},
     )
+
+
+def test_private_interaction_restores_notifications_after_unblocking(
+    tmp_path: Path,
+) -> None:
+    run_runtime_script(
+        """
+import asyncio
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message, Update, User as TelegramUser
+from telegram.db.models import User
+from telegram.middlewares.logging_to_db import UserLoggingMiddleware
+
+async def check():
+    user = User(user_id=12, bot_blocked=True, _bot_blocked_date=10)
+    session = SimpleNamespace(get=AsyncMock(return_value=user), commit=AsyncMock())
+    middleware = UserLoggingMiddleware()
+    sender = TelegramUser(id=12, first_name='User', is_bot=False)
+    for chat in ({'id': -10, 'type': 'group'}, {'id': 12, 'type': 'private'}):
+        message = Message(message_id=1, date=datetime.now(timezone.utc),
+                          chat=chat, from_user=sender, text='/start')
+        await middleware.on_process_message(Update(update_id=1, message=message),
+                                            {'session': session})
+        if chat['type'] == 'group':
+            assert user.bot_blocked
+            session.commit.assert_not_awaited()
+        else:
+            assert not user.bot_blocked and user.bot_blocked_date is None
+            session.commit.assert_awaited_once()
+
+    for chat in ({'id': -10, 'type': 'group'}, {'id': 99, 'type': 'private'},
+                 {'id': 12, 'type': 'private'}):
+        user.bot_blocked = True
+        user._bot_blocked_date = 10
+        session.commit.reset_mock()
+        message = Message(message_id=1, date=datetime.now(timezone.utc),
+                          chat=chat, text='Subscription')
+        callback = CallbackQuery(id='test', from_user=sender,
+                                 chat_instance='test', message=message,
+                                 data='subscription:menu')
+        await middleware.on_process_message(
+            Update(update_id=2, callback_query=callback), {'session': session},
+        )
+        if chat['id'] != sender.id:
+            assert user.bot_blocked
+            session.commit.assert_not_awaited()
+        else:
+            assert not user.bot_blocked and user.bot_blocked_date is None
+            session.commit.assert_awaited_once()
+
+    user.bot_blocked = True
+    session.commit.reset_mock()
+    for unavailable in (None, InaccessibleMessage(
+        message_id=1, date=0, chat={'id': 12, 'type': 'private'},
+    )):
+        callback = CallbackQuery(id='test', from_user=sender,
+                                 chat_instance='test', message=unavailable,
+                                 inline_message_id='test' if unavailable is None else None,
+                                 data='subscription:menu')
+        await middleware.on_process_message(
+            Update(update_id=3, callback_query=callback), {'session': session},
+        )
+        assert user.bot_blocked
+        session.commit.assert_not_awaited()
+
+asyncio.run(check())
+""",
+        tmp_path,
+    )
